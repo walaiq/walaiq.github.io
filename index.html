@@ -10,6 +10,8 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyBGZ0UfENYGsClarETAIz4OozxRNOxBHXs",
@@ -21,10 +23,25 @@
     measurementId: "G-94YZ91K1VX"
   };
   let _db = null;
+  let _auth = null;
   try{
     firebase.initializeApp(firebaseConfig);
     _db = firebase.firestore();
+    _auth = firebase.auth();
   }catch(e){ console.error('Firebase init failed', e); }
+
+  // ====== إعدادات EmailJS (لإرسال كود التحقق الحقيقي على البريد الإلكتروني) ======
+  // لازم تسوي حساب مجاني على emailjs.com، تربطه بجيميلك، تسوي Template فيه متغيرات:
+  // {{to_email}} و {{code}} و {{business_name}} — وتحط القيم الثلاثة تحت بدال النصوص الحمراء.
+  const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+  const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+  const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+  window._EMAILJS_READY = (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY');
+  window._EMAILJS_SERVICE_ID = EMAILJS_SERVICE_ID;
+  window._EMAILJS_TEMPLATE_ID = EMAILJS_TEMPLATE_ID;
+  try{
+    if(window.emailjs && window._EMAILJS_READY){ emailjs.init(EMAILJS_PUBLIC_KEY); }
+  }catch(e){ console.error('EmailJS init failed', e); }
 </script>
 <style>
   :root{
@@ -238,13 +255,13 @@
   .price-list{text-align:right; display:flex; flex-direction:column; gap:10px; margin-bottom:22px; font-size:13px;}
   .price-list div{display:flex; gap:8px; align-items:flex-start; line-height:1.6;}
   .price-list div::before{content:'✓'; color:var(--accent); font-weight:900; flex-shrink:0;}
-  .partners-viewport{overflow:hidden; width:100%; padding:6px 0; position:relative; -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}
-  .partners-row{display:flex; gap:20px; width:max-content; direction:ltr; animation:partnersMarquee 22s linear infinite;}
-  .partners-row:hover{animation-play-state:paused;}
-  .partner-item{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; width:92px;}
-  .partner-item img{width:80px; height:80px; border-radius:50%; object-fit:cover; background:#fff; border:2px solid var(--accent-light); box-shadow:0 4px 12px -4px rgba(20,40,32,.2);}
+  .partners-viewport{overflow-x:auto; overflow-y:hidden; width:100%; padding:6px 0; position:relative; scrollbar-width:none; -ms-overflow-style:none; -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); cursor:grab;}
+  .partners-viewport::-webkit-scrollbar{display:none;}
+  .partners-viewport:active{cursor:grabbing;}
+  .partners-row{display:flex; gap:20px; width:max-content; direction:ltr;}
+  .partner-item{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; width:92px; user-select:none;}
+  .partner-item img{width:80px; height:80px; border-radius:50%; object-fit:cover; background:#fff; border:2px solid var(--accent-light); box-shadow:0 4px 12px -4px rgba(20,40,32,.2); pointer-events:none;}
   .partner-item span{font-size:10.5px; color:var(--muted); text-align:center;}
-  @keyframes partnersMarquee{0%{transform:translateX(0);} 100%{transform:translateX(-50%);}}
   .testi-card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 4px 12px -8px rgba(20,40,32,.08);}
   .testi-card p{font-size:13.5px; line-height:1.75;}
   .testi-card strong{display:block; margin-top:8px; font-size:12px; color:var(--primary);}
@@ -429,7 +446,7 @@
         <div class="lp-section-eyebrow">شركاؤنا</div>
         <h2 class="lp-section-h2">أعمال تثق بولاء</h2>
       </div>
-      <div class="partners-viewport"><div class="partners-row" id="partnersRow"></div></div>
+      <div class="partners-viewport" id="partnersViewport"><div class="partners-row" id="partnersRow"></div></div>
     </div>
 
     <div class="lp-section" id="testimonialsSection" style="display:none;">
@@ -681,6 +698,7 @@ function switchTab(which){
 /* ---------------- Init & routing ---------------- */
 async function init(){
   document.getElementById('logoutBtn').classList.add('hidden');
+  await handleEmailLinkReturn(); // لازم تصير أول شي قبل قراءة بارامترات الرابط، لأن رابط فايربيس يستخدم نفس اسم mode
   const params = new URLSearchParams(window.location.search);
   const bizId = params.get('biz');
   const mode = params.get('mode'); // 'join' or 'scan'
@@ -775,6 +793,41 @@ function toggleFaq(btn){
   btn.parentElement.classList.toggle('open');
 }
 
+let _partnersScrollFrame = null;
+let _partnersPaused = false;
+let _partnersResumeTimer = null;
+function startPartnersAutoScroll(){
+  const vp = document.getElementById('partnersViewport');
+  if(!vp) return;
+  if(_partnersScrollFrame) cancelAnimationFrame(_partnersScrollFrame);
+  _partnersPaused = false;
+
+  function step(){
+    if(!_partnersPaused){
+      vp.scrollLeft += 0.5; // سرعة الحركة التلقائية (تتحرك من اليمين لليسار)
+      const half = vp.scrollWidth / 2;
+      if(half > 0 && vp.scrollLeft >= half){
+        vp.scrollLeft -= half; // نرجع بداية النسخة المكررة بدون ما يحس المستخدم بقفزة
+      }
+    }
+    _partnersScrollFrame = requestAnimationFrame(step);
+  }
+  _partnersScrollFrame = requestAnimationFrame(step);
+
+  // لو المستخدم لمس أو سحب بإصبعه نوقف الحركة التلقائية، وترجع تلقائياً بعد ثانيتين من آخر لمسة
+  const pauseScroll = () => { _partnersPaused = true; clearTimeout(_partnersResumeTimer); };
+  const resumeScrollLater = () => { _partnersResumeTimer = setTimeout(()=>{ _partnersPaused = false; }, 2000); };
+
+  if(!vp.dataset.dragBound){
+    vp.dataset.dragBound = '1';
+    vp.addEventListener('touchstart', pauseScroll, {passive:true});
+    vp.addEventListener('touchend', resumeScrollLater, {passive:true});
+    vp.addEventListener('mousedown', pauseScroll);
+    vp.addEventListener('mouseleave', resumeScrollLater);
+    window.addEventListener('mouseup', resumeScrollLater);
+  }
+}
+
 async function loadLandingExtras(){
   try{
     const pRaw = await storageGet('partners-list');
@@ -785,10 +838,8 @@ async function loadLandingExtras(){
       const itemHtml = p => `<div class="partner-item"><img src="${escapeHTML(p.logo)}" onerror="this.style.display='none'"><span>${escapeHTML(p.name)}</span></div>`;
       // نكرر القائمة مرتين عشان الحركة تكون متواصلة بدون فراغ لما تنتهي دورة وتبدأ ثانية
       pRow.innerHTML = partners.map(itemHtml).join('') + partners.map(itemHtml).join('');
-      // كل ما زاد عدد الشركاء نزيد مدة الدورة عشان السرعة تبقى ثابتة ومريحة للعين
-      const duration = Math.max(14, partners.length * 5);
-      pRow.style.animationDuration = duration + 's';
       pSection.style.display = '';
+      startPartnersAutoScroll();
     } else if(pSection){ pSection.style.display = 'none'; }
   }catch(e){}
   try{
@@ -825,24 +876,67 @@ function backToLanding(){
 }
 
 /* ================= MERCHANT: entry (unified phone-based flow) ================= */
-function renderMerchantEntry(){
-  if(currentBiz){ renderMerchantDashboard(); return; }
+function isEmailVerified(){
+  try{ return !!localStorage.getItem('wala_email_verified'); }catch(e){ return false; }
+}
+function markEmailVerified(email){
+  try{ localStorage.setItem('wala_email_verified', email); }catch(e){}
+}
+function isValidEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+async function handleEmailLinkReturn(){
+  if(!_auth || !_auth.isSignInWithEmailLink(window.location.href)) return;
+  let email = null;
+  try{ email = localStorage.getItem('wala_email_for_signin'); }catch(e){}
+  if(!email){ email = prompt('أدخل نفس البريد الإلكتروني اللي استخدمته عشان نكمّل التفعيل:'); }
+  if(!email) return;
+  try{
+    await _auth.signInWithEmailLink(email, window.location.href);
+    try{ localStorage.removeItem('wala_email_for_signin'); }catch(e){}
+    markEmailVerified(email);
+    // ننظف بارامترات فايربيس من الرابط عشان ما تتعارض مع روابط الموقع (join/scan/admin)
+    window.history.replaceState({}, document.title, window.location.pathname);
+    toast('تم تفعيل بريدك الإلكتروني ✅');
+  }catch(e){
+    console.error('email link sign-in failed', e);
+    toast('تعذّر تفعيل الرابط، جرب تسجل من جديد وترسل رابط تفعيل جديد');
+  }
+}
+
+function renderEmailGate(){
   document.getElementById('merchantView').innerHTML = `
     <div class="card">
       <div class="eyebrow">صاحب العمل</div>
-      <h3>ادخل برقم هاتفك</h3>
-      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">رقم هاتفك هو حسابك — لو عندك حساب نسجّل دخولك، ولو أول مرة ننشئ لك حساب جديد بنفس الرقم.</p>
-      <label>رقم الهاتف</label>
-      <input type="tel" id="entryPhone" placeholder="07xxxxxxxxx" dir="ltr" oninput="checkPhoneStatus()">
-      <div id="phoneStatusHint" class="note hidden" style="margin-top:6px;"></div>
-      <label>كلمة المرور</label>
-      <input type="password" id="entryPassword" placeholder="اكتب كلمة مرور أو اختر وحدة جديدة">
-      <button class="btn btn-primary" style="margin-top:16px;" onclick="checkPhoneAndProceed()">متابعة</button>
-      <div class="foot-link"><button class="link-btn" onclick="showForgotPassword()">نسيت كلمة المرور؟</button></div>
-      <div id="newBizExtraFields"></div>
+      <h3>فعّل بريدك الإلكتروني أولاً</h3>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">عشان نتأكد إنك صاحب حساب حقيقي، لازم تفعّل بريدك الإلكتروني قبل التسجيل. راح نرسلك رابط تفعيل، تفتحه من نفس الجوال أو المتصفح.</p>
+      <label>البريد الإلكتروني</label>
+      <input type="text" id="gateEmail" placeholder="example@gmail.com" dir="ltr" inputmode="email">
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="sendVerificationEmail()">📩 أرسل رابط التفعيل</button>
+      <div id="gateEmailNote" class="note hidden" style="margin-top:12px;"></div>
     </div>
   `;
-  window._entryPhoneNormalized = null;
+}
+
+async function sendVerificationEmail(){
+  const email = (document.getElementById('gateEmail').value || '').trim();
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(!_auth){ toast('تعذّر الاتصال بخدمة التفعيل، جرب لاحقاً'); return; }
+  const actionCodeSettings = {
+    url: window.location.origin + window.location.pathname,
+    handleCodeInApp: true
+  };
+  try{
+    await _auth.sendSignInLinkToEmail(email, actionCodeSettings);
+    try{ localStorage.setItem('wala_email_for_signin', email); }catch(e){}
+    const note = document.getElementById('gateEmailNote');
+    note.classList.remove('hidden');
+    note.textContent = '✅ أرسلنا رابط تفعيل إلى '+email+'. افتح بريدك واضغط الرابط، وراح ترجعك هالصفحة تلقائياً وتكمل تسجيلك.';
+  }catch(e){
+    console.error('sendSignInLinkToEmail failed', e);
+    toast('تعذّر إرسال رابط التفعيل، تأكد من صحة البريد وحاول مرة ثانية');
+  }
 }
 
 function catLabel(catId){
@@ -868,71 +962,6 @@ function normalizePhone(raw){
   return raw.trim().replace(/[^0-9]/g,'');
 }
 
-
-let _phoneCheckTimer = null;
-function checkPhoneStatus(){
-  clearTimeout(_phoneCheckTimer);
-  const hint = document.getElementById('phoneStatusHint');
-  const phone = normalizePhone(document.getElementById('entryPhone').value);
-  if(!hint) return;
-  if(phone.length < 8){ hint.classList.add('hidden'); return; }
-  _phoneCheckTimer = setTimeout(async ()=>{
-    const raw = await storageGet('business:'+phone);
-    if(raw){
-      hint.textContent = '🔒 هذا الرقم مسجّل عندنا — اكتب كلمة مرورك وراح ندخلك مباشرة';
-      hint.style.color = 'var(--sky)';
-    } else {
-      hint.textContent = '✅ رقم جديد — اكتب كلمة مرور تختارها وراح ننشئ لك حساب جديد بيها';
-      hint.style.color = 'var(--primary)';
-    }
-    hint.classList.remove('hidden');
-  }, 400);
-}
-
-async function checkPhoneAndProceed(){
-  const phoneRaw = document.getElementById('entryPhone').value;
-  const password = document.getElementById('entryPassword').value;
-  const phone = normalizePhone(phoneRaw);
-  if(!phone || phone.length < 8){ toast('اكتب رقم هاتف صحيح'); return; }
-  if(!password){ toast('اكتب كلمة مرور'); return; }
-
-  const raw = await storageGet('business:'+phone);
-  if(raw){
-    // حساب موجود مسبقاً — تسجيل دخول
-    const biz = JSON.parse(raw);
-    if(biz.password !== password){ toast('كلمة المرور غير صحيحة'); return; }
-    currentBiz = await ensureTrialDates(biz);
-    document.getElementById('logoutBtn').classList.remove('hidden');
-    saveBizSession(phone);
-    toast('أهلاً بعودتك، '+biz.name);
-    renderMerchantDashboard();
-    return;
-  }
-
-  // ما فيه حساب بهذا الرقم — نعرض حقول إنشاء حساب جديد بنفس الرقم وكلمة المرور
-  window._entryPhoneNormalized = phone;
-  window._entryPasswordChosen = password;
-  document.getElementById('newBizExtraFields').innerHTML = `
-    <div class="note" style="margin-top:14px;">هذا أول مرة تسجل فيها — عبّي بيانات محلك تحت وننشئ حسابك مباشرة برقم <strong dir="ltr">${escapeHTML(phone)}</strong>.</div>
-    <label style="margin-top:14px;">اسم العمل</label>
-    <input type="text" id="regName" placeholder="مثال: مقهى الزاوية">
-    <label>مجال النشاط</label>
-    <div class="cat-grid" id="regCatGrid">${BIZ_CATEGORIES.map(c=>`<button type="button" class="cat-btn" data-cat="${c.id}" onclick="selectRegCategory('${c.id}')"><span>${c.icon}</span>${c.label}</button>`).join('')}</div>
-    <div class="row-2">
-      <div><label>لون البطاقة</label><div class="color-row"><input type="color" id="regPrimary" value="#1F4B3F"></div></div>
-      <div><label>لون التمييز</label><div class="color-row"><input type="color" id="regAccent" value="#B98B3E"></div></div>
-    </div>
-    <label>عدد الزيارات للمكافأة</label>
-    <input type="text" id="regThreshold" placeholder="مثال: 6" inputmode="numeric">
-    <label>نص المكافأة</label>
-    <input type="text" id="regReward" placeholder="مثال: مشروب مجاني بعد 6 زيارات">
-    <label>عروضك الحالية (سطر لكل عرض)</label>
-    <textarea id="regOffers" placeholder="خصم 15% للطلبات فوق 20 ألف&#10;قهوة مجانية يوم الأربعاء"></textarea>
-    <button class="btn btn-accent" style="margin-top:16px;" onclick="registerBusiness()">إنشاء الحساب</button>
-  `;
-  window._regCategory = 'other';
-}
-
 const BIZ_CATEGORIES = [
   {id:'restaurant', label:'مطعم', icon:'🍽️'},
   {id:'cafe', label:'كافيه', icon:'☕'},
@@ -944,37 +973,115 @@ const BIZ_CATEGORIES = [
   {id:'other', label:'أخرى', icon:'⭐'}
 ];
 
-function selectRegCategory(catId){
-  window._regCategory = catId;
-  document.querySelectorAll('#regCatGrid .cat-btn').forEach(b=>b.classList.toggle('active', b.dataset.cat===catId));
+const IRAQ_CITIES = ['بغداد','البصرة','نينوى (الموصل)','أربيل','النجف','كربلاء','السليمانية','الأنبار','ديالى','كركوك','واسط','ميسان','ذي قار','بابل','القادسية','المثنى','صلاح الدين','دهوك','أخرى'];
+
+function renderMerchantEntry(){
+  if(currentBiz){ renderMerchantDashboard(); return; }
+  renderMerchantLogin();
+}
+
+/* -------- تسجيل الدخول (بريد إلكتروني + كلمة مرور) -------- */
+function renderMerchantLogin(){
+  document.getElementById('merchantView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">صاحب العمل</div>
+      <h3>تسجيل الدخول</h3>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">أدخل بريدك وكلمة المرور للوصول إلى لوحة محلّك.</p>
+      <label>البريد الإلكتروني</label>
+      <input type="text" id="loginEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
+      <label>كلمة المرور</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="merchantLogin()">دخول</button>
+      <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;"><button class="link-btn" onclick="showForgotPassword()">نسيت كلمة المرور؟</button></div>
+      <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;">ما عندك حساب؟ <button class="link-btn" onclick="renderMerchantRegister()">أنشئ حسابًا</button></div>
+    </div>
+  `;
+}
+
+async function merchantLogin(){
+  const email = (document.getElementById('loginEmail').value || '').trim().toLowerCase();
+  const password = document.getElementById('loginPassword').value;
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(!password){ toast('اكتب كلمة المرور'); return; }
+
+  let phoneId = await storageGet('email-index:'+email);
+  if(!phoneId){
+    toast('ما فيه حساب بهذا البريد');
+    return;
+  }
+  const raw = await storageGet('business:'+phoneId);
+  if(!raw){ toast('تعذّر إيجاد الحساب، تواصل معنا'); return; }
+  const biz = JSON.parse(raw);
+  if(biz.password !== password){ toast('كلمة المرور غير صحيحة'); return; }
+
+  currentBiz = await ensureTrialDates(biz);
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  saveBizSession(phoneId);
+  toast('أهلاً بعودتك، '+biz.name);
+  renderMerchantDashboard();
+}
+
+/* -------- إنشاء حساب جديد -------- */
+function renderMerchantRegister(){
+  document.getElementById('merchantView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">صاحب العمل</div>
+      <h3>أنشئ حساب محلك</h3>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">دقيقة واحدة. بعدها تُدخل كود التفعيل الذي تستلمه منّا ويفتح النظام.</p>
+      <label>اسم المحل</label>
+      <input type="text" id="regBizName" placeholder="مثال: مطعم النخيل">
+      <label>اسم صاحب المحل</label>
+      <input type="text" id="regOwnerName" placeholder="الاسم الكامل">
+      <label>رقم الهاتف</label>
+      <input type="tel" id="regPhone" placeholder="07xxxxxxxxx" dir="ltr">
+      <label>المدينة</label>
+      <select id="regCity">
+        <option value="">اختر المدينة</option>
+        ${IRAQ_CITIES.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('')}
+      </select>
+      <label>البريد الإلكتروني</label>
+      <input type="text" id="regEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
+      <div class="note" style="margin-top:6px;">سنستخدمه لتسجيل دخولك ولاستعادة كلمة المرور.</div>
+      <label>كلمة المرور</label>
+      <input type="password" id="regPassword" placeholder="8 خانات على الأقل">
+      <button class="btn btn-accent" style="margin-top:16px;" onclick="registerBusiness()">إنشاء الحساب</button>
+      <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;">عندك حساب؟ <button class="link-btn" onclick="renderMerchantLogin()">سجّل دخولك</button></div>
+    </div>
+  `;
 }
 
 async function registerBusiness(){
-  const phone = window._entryPhoneNormalized;
-  const password = window._entryPasswordChosen;
-  if(!phone || !password){ toast('صار خطأ، جرب من جديد'); return; }
-  const name = document.getElementById('regName').value.trim();
-  const primary = document.getElementById('regPrimary').value;
-  const accent = document.getElementById('regAccent').value;
-  const threshold = parseInt(document.getElementById('regThreshold').value) || 6;
-  const rewardText = document.getElementById('regReward').value.trim() || `مكافأة بعد ${threshold} زيارات`;
-  const offers = document.getElementById('regOffers').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const name = document.getElementById('regBizName').value.trim();
+  const ownerName = document.getElementById('regOwnerName').value.trim();
+  const phone = normalizePhone(document.getElementById('regPhone').value);
+  const city = document.getElementById('regCity').value;
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const password = document.getElementById('regPassword').value;
 
-  if(!name){ toast('اكتب اسم العمل'); return; }
+  if(!name){ toast('اكتب اسم المحل'); return; }
+  if(!ownerName){ toast('اكتب اسم صاحب المحل'); return; }
+  if(!phone || phone.length < 8){ toast('اكتب رقم هاتف صحيح'); return; }
+  if(!city){ toast('اختر المدينة'); return; }
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(!password || password.length < 8){ toast('كلمة المرور لازم تكون 8 خانات على الأقل'); return; }
+
+  const existingPhone = await storageGet('business:'+phone);
+  if(existingPhone){ toast('هذا الرقم مسجّل عندنا مسبقاً — سجّل دخولك بدل هذا'); return; }
+  const existingEmail = await storageGet('email-index:'+email);
+  if(existingEmail){ toast('هذا البريد مستخدم مسبقاً لحساب آخر'); return; }
 
   const idxRaw = await storageGet('businesses-index');
   let index = idxRaw ? JSON.parse(idxRaw) : [];
-  const finalId = phone; // رقم الهاتف نفسه هو معرّف الحساب
+  const finalId = phone; // رقم الهاتف نفسه هو معرّف الحساب داخلياً
 
-  const trialUntil = new Date();
-  trialUntil.setDate(trialUntil.getDate() + 30);
-  const category = window._regCategory || 'other';
   const biz = {
-    id:finalId, phone:finalId, name, category, password, primary, accent, threshold, rewardText, offers,
+    id:finalId, phone:finalId, name, ownerName, city, email, password,
+    category:'other', primary:'#1F4B3F', accent:'#B98B3E', threshold:6,
+    rewardText:'مكافأة بعد 6 زيارات', offers:[],
     createdAt:new Date().toISOString(),
-    subscriptionStatus:'trial', subscriptionUntil:trialUntil.toISOString()
+    subscriptionStatus:'pending_email', subscriptionUntil:null
   };
-  _storageDegraded = false; // نصفّر المؤشر عشان الفحص التالي يعكس هذي المحاولة تحديداً
+  _storageDegraded = false;
   const ok = await storageSet('business:'+finalId, JSON.stringify(biz));
   if(!ok || _storageDegraded){
     toast('⚠️ تعذّر الحفظ الدائم الآن. تأكد من اتصال الإنترنت وحاول التسجيل مرة ثانية');
@@ -983,24 +1090,86 @@ async function registerBusiness(){
   if(!index.includes(finalId)){ index.push(finalId); }
   await storageSet('businesses-index', JSON.stringify(index));
   await storageSet('customers-index:'+finalId, JSON.stringify([]));
+  await storageSet('email-index:'+email, finalId);
 
   currentBiz = biz;
   document.getElementById('logoutBtn').classList.remove('hidden');
   saveBizSession(finalId);
-  renderAccountCreatedConfirm(finalId);
+  toast('تم إنشاء حسابك 🎉');
+  await sendEmailVerificationCode(biz);
+  renderEmailCodeGate();
 }
 
-function renderAccountCreatedConfirm(bizId){
+/* -------- إرسال والتحقق من كود البريد الإلكتروني (يفتح شهر مجاني) -------- */
+function generateSixDigitCode(){
+  return String(Math.floor(100000 + Math.random()*900000));
+}
+
+async function sendEmailVerificationCode(biz){
+  const code = generateSixDigitCode();
+  await storageSet('email-verify:'+biz.id, JSON.stringify({code, createdAt:new Date().toISOString()}));
+
+  if(window.emailjs && window._EMAILJS_READY){
+    try{
+      await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_TEMPLATE_ID, {
+        to_email: biz.email,
+        code: code,
+        business_name: biz.name
+      });
+    }catch(e){
+      console.error('emailjs send failed', e);
+      toast('تعذّر إرسال البريد، جرب "إعادة الإرسال" بعد شوي');
+    }
+  } else {
+    // خدمة الإيميل لسا ما انربطت (شغل تجريبي) — نعرض الكود مباشرة عشان ما يوقف التسجيل
+    console.warn('EmailJS not configured — showing code on screen as fallback');
+  }
+}
+
+function renderEmailCodeGate(){
+  const b = currentBiz;
   document.getElementById('merchantView').innerHTML = `
     <div class="card" style="text-align:center;">
-      <div style="font-size:34px;">🎉</div>
-      <h3 style="margin:10px 0 4px;">تم إنشاء حسابك</h3>
-      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">رقم هاتفك هو حسابك من الآن — تسجّل دخولك لاحقاً بنفس الرقم وكلمة المرور.</p>
-      <div class="link-box"><input type="text" readonly value="${bizId}" id="newBizIdInput" style="text-align:center; font-weight:800; font-size:15px; direction:ltr;" onclick="this.select()" onfocus="this.select()"><button class="icon-btn" onclick="copyText(document.getElementById('newBizIdInput').value, document.getElementById('newBizIdInput'))">📋</button></div>
-      <button class="btn btn-primary" style="margin-top:18px;" onclick="renderMerchantDashboard()">الذهاب للوحة التحكم</button>
+      <div style="font-size:34px;">📩</div>
+      <h3 style="margin:10px 0 4px;">أدخل كود التحقق</h3>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">أرسلنا كود مكوّن من 6 أرقام إلى بريدك <strong dir="ltr">${escapeHTML(b.email)}</strong>. افتح بريدك، خذ الكود، واكتبه هنا — وراح تحصل على شهر مجاني فوراً 🎁</p>
+      <input type="text" id="emailCodeInput" placeholder="000000" dir="ltr" inputmode="numeric" maxlength="6" style="text-align:center; font-weight:800; letter-spacing:4px; font-size:20px;">
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="verifyEmailCode()">✅ تحقق وابدأ</button>
+      <button class="link-btn" style="margin-top:12px;" onclick="resendEmailCode()">لم يوصلني الكود — أعد الإرسال</button>
+      <div>
+        <button class="link-btn" style="margin-top:16px; color:var(--danger);" onclick="logout()">تسجيل الخروج</button>
+      </div>
+      ${!window._EMAILJS_READY ? `<div class="note" style="margin-top:14px; text-align:right;">⚠️ خدمة إرسال البريد لسا ما انربطت بالموقع (EmailJS). لين تربطها، تقدر تشوف الكود من إعدادات المطوّر أو تتواصل وياك يدوياً.</div>` : ''}
     </div>
   `;
 }
+
+async function resendEmailCode(){
+  await sendEmailVerificationCode(currentBiz);
+  toast('تم إعادة إرسال الكود 📩');
+}
+
+async function verifyEmailCode(){
+  const input = (document.getElementById('emailCodeInput').value || '').trim();
+  if(!input){ toast('اكتب الكود المرسل لبريدك'); return; }
+  const raw = await storageGet('email-verify:'+currentBiz.id);
+  if(!raw){ toast('انتهت صلاحية الكود، اضغط "أعد الإرسال"'); return; }
+  const data = JSON.parse(raw);
+  if(input !== data.code){ toast('الكود غير صحيح'); return; }
+
+  const until = new Date();
+  until.setDate(until.getDate() + 30); // شهر مجاني بعد التحقق
+
+  currentBiz.subscriptionStatus = 'trial';
+  currentBiz.subscriptionUntil = until.toISOString();
+  await storageSet('business:'+currentBiz.id, JSON.stringify(currentBiz));
+  await storageDelete('email-verify:'+currentBiz.id);
+
+  toast('🎉 تم التحقق! عندك شهر مجاني كامل');
+  renderMerchantDashboard();
+}
+
+
 
 function computeTrialUntil(createdAt){
   const d = new Date(createdAt || new Date());
@@ -1076,6 +1245,11 @@ function renderTrialExpired(){
 }
 
 async function renderMerchantDashboard(){
+  // لو الحساب لسا يستنى تحقق البريد الإلكتروني (تسجيل جديد)
+  if(currentBiz.subscriptionStatus === 'pending_email'){
+    renderEmailCodeGate();
+    return;
+  }
   // فحص انتهاء الاشتراك (تجريبي أو فعّال منتهي) أول شي قبل عرض أي بيانات
   if((currentBiz.subscriptionStatus === 'trial' || currentBiz.subscriptionStatus === 'active') && currentBiz.subscriptionUntil){
     const daysLeft = Math.ceil((new Date(currentBiz.subscriptionUntil) - new Date()) / (1000*60*60*24));
@@ -1158,10 +1332,18 @@ async function renderMerchantDashboard(){
       <h3>💾 نسخة احتياطية</h3>
       <p style="font-size:13px; color:var(--muted); line-height:1.7;">نزّل نسخة من بيانات عملك (البطاقة، الزبائن، الرسائل) كملف على جوالك. لو صار أي تحديث للصفحة أو تعطل، تقدر تستوردها ترجع بياناتك.</p>
       <div class="row-2" style="margin-top:10px;">
-        <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="exportMerchantBackup()">⬇️ تصدير نسخة</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="exportMerchantBackup()">⬇️ تصدير نسخة (JSON)</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="document.getElementById('importFileInput').click()">⬆️ استيراد نسخة</button>
       </div>
+      <div class="note" style="margin-top:8px;">ملف الـ JSON مخصص للاسترجاع التلقائي داخل المنصة فقط (مو للقراءة اليدوية).</div>
       <input type="file" id="importFileInput" accept="application/json" class="hidden" onchange="importMerchantBackup(event)">
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">جدول قابل للقراءة</div>
+      <h3>📊 تصدير جدول الزبائن</h3>
+      <p style="font-size:13px; color:var(--muted); line-height:1.7;">ملف جدول (Excel / Google Sheets) مرتب بأسماء الزبائن، أرقامهم، نقاطهم، وتاريخ انضمامهم — مناسب للمراجعة والطباعة.</p>
+      <button class="btn btn-accent btn-sm" style="width:100%; margin-top:10px;" onclick="exportCustomersCSV()">📊 تصدير الجدول</button>
     </div>
 
     <div class="card">
@@ -1223,6 +1405,41 @@ async function renderMerchantDashboard(){
     qrWrap.innerHTML = '';
     new QRCode(qrWrap, { text: joinLink, width:170, height:170, colorDark:'#1B2420', colorLight:'#ffffff' });
   }
+}
+
+function csvEscape(val){
+  const s = String(val === null || val === undefined ? '' : val);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+async function exportCustomersCSV(){
+  const {list:customers} = await loadAllCustomers(currentBiz.id);
+  if(!customers || customers.length === 0){ toast('ما فيه زبائن بعد للتصدير'); return; }
+
+  const headers = ['اسم الزبون', 'رقم الهاتف', 'النقاط الحالية', 'متبقي للمكافأة', 'تاريخ الانضمام', 'تاريخ الميلاد'];
+  const rows = customers
+    .slice()
+    .sort((a,b) => (b.points||0) - (a.points||0)) // الأعلى نقاط أول
+    .map(c => {
+      const points = c.points || 0;
+      const remaining = Math.max(0, (currentBiz.threshold||0) - points);
+      const joined = c.joinedAt ? new Date(c.joinedAt).toLocaleDateString('ar') : '';
+      const bday = c.birthday ? new Date(c.birthday).toLocaleDateString('ar') : '';
+      return [c.name || c.phone, c.phone, points, remaining, joined, bday];
+    });
+
+  const lines = [headers, ...rows].map(row => row.map(csvEscape).join(','));
+  // BOM عشان اكسل يعرض العربي صح
+  const csvContent = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'زبائن-' + (currentBiz.name || currentBiz.id) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('تم تصدير الجدول 📊');
 }
 
 function saveJSONFile(filename, dataObj){
@@ -1936,6 +2153,7 @@ async function renderAdminPanel(){
   `;
 }
 
+/* ================= ADMIN: activity log ================= */
 async function renderAdminActivityLog(){
   const raw = await storageGet('activity-log');
   const log = raw ? JSON.parse(raw) : [];
