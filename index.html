@@ -938,9 +938,12 @@ function goToApp(mode){
 }
 
 function backToLanding(){
-  // لو المستخدم داخل قسم الإدارة، رجّعه للوحة الإدارة الرئيسية بدل ما نطرده لصفحة الهبوط العامة
-  // (صفحة الهبوط ما فيها رابط يرجعه للإدارة، فكان يعلق هناك لين يسوي رفرش)
-  if(currentTab === 'admin' && adminAuthed){
+  // لو المستخدم داخل قسم الإدارة فعلياً (نتأكد من العرض الحقيقي بالشاشة، مو من متغير currentTab
+  // لأنه ما ينضبط لو دخل الإدارة مباشرة برابط ?mode=admin)، رجّعه للوحة الإدارة الرئيسية
+  // بدل ما نطرده لصفحة الهبوط العامة اللي ما فيها رابط يرجعه (كان يعلق هناك لين يسوي رفرش)
+  const adminViewEl = document.getElementById('adminView');
+  const adminCurrentlyShown = adminViewEl && !adminViewEl.classList.contains('hidden');
+  if(adminCurrentlyShown && adminAuthed){
     renderAdminPanel();
     return;
   }
