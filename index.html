@@ -373,11 +373,11 @@
       <div class="lp-steps">
         <div class="lp-step">
           <div class="lp-step-num">1</div>
-          <div class="lp-step-text"><h5>أنشئ حساب عملك</h5><p>اسم محلك، ألوان بطاقتك، وعدد الزيارات اللي توصّل للمكافأة.</p></div>
+          <div class="lp-step-text"><h5>أنشئ حساب عملك</h5><p>اسم عملك، ألوان بطاقتك، وعدد الزيارات اللي توصّل للمكافأة.</p></div>
         </div>
         <div class="lp-step">
           <div class="lp-step-num">2</div>
-          <div class="lp-step-text"><h5>اطبع رمز الانضمام</h5><p>حطه بمحلك — أي زبون يصوّره وتصير عنده بطاقة فوراً.</p></div>
+          <div class="lp-step-text"><h5>اطبع رمز الانضمام</h5><p>حطه بعملك — أي زبون يصوّره وتصير عنده بطاقة فوراً.</p></div>
         </div>
         <div class="lp-step">
           <div class="lp-step-num">3</div>
@@ -484,7 +484,7 @@
 
     <div class="lp-final-cta">
       <h3>شهر كامل مجاناً، بدون بطاقة ائتمان</h3>
-      <p>جرّب "ولاء" مع محلك الحين، وبعد الشهر اشترك بخطة شهرية بسيطة لو عجبك.</p>
+      <p>جرّب "ولاء" مع عملك الحين، وبعد الشهر اشترك بخطة شهرية بسيطة لو عجبك.</p>
       <button class="lp-btn lp-btn-primary" onclick="goToApp('register')">ابدأ تجربتك المجانية</button>
     </div>
   </div>
@@ -582,17 +582,18 @@ function generateBizId(){
 const ADMIN_WHATSAPP_NUMBER = '9647718856958'; // رقم واتساب الإدارة
 
 function showForgotPassword(){
-  const waLink = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، نسيت كلمة مرور حساب عملي بمنصة ولاء. معرّف عملي هو: ')}`;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-box">
       <div class="modal-icon" style="background:var(--accent-light); color:var(--primary-dark);">🔑</div>
-      <h3>نسيت كلمة المرور؟</h3>
-      <p>تواصل مع إدارة "ولاء" عبر واتساب وأرسل معرّف عملك، وبنساعدك تسترجع الوصول لحسابك.</p>
+      <h3>استعادة كلمة المرور</h3>
+      <p>اكتب بريدك المسجّل وراح نرسلك رمز تقدر تغيّر بيه كلمة مرورك مباشرة.</p>
+      <label style="text-align:right; display:block;">البريد الإلكتروني</label>
+      <input type="text" id="fpEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
       <div class="modal-actions">
         <button class="btn btn-ghost" id="fpCloseBtn">إغلاق</button>
-        <a class="btn btn-primary" href="${waLink}" target="_blank" rel="noopener" style="text-decoration:none;">تواصل عبر واتساب</a>
+        <button class="btn btn-primary" id="fpSendBtn" onclick="sendPasswordResetCode()">إرسال الرمز</button>
       </div>
     </div>
   `;
@@ -600,6 +601,78 @@ function showForgotPassword(){
   const close = () => document.body.removeChild(overlay);
   overlay.querySelector('#fpCloseBtn').onclick = close;
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
+}
+
+async function sendPasswordResetCode(){
+  const email = (document.getElementById('fpEmail').value || '').trim().toLowerCase();
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+
+  const bizId = await storageGet('email-index:'+email);
+  if(!bizId){ toast('ما فيه حساب مسجّل بهذا البريد'); return; }
+  const raw = await storageGet('business:'+bizId);
+  if(!raw){ toast('تعذّر إيجاد الحساب، تواصل معنا'); return; }
+  const biz = JSON.parse(raw);
+
+  const code = generateSixDigitCode();
+  await storageSet('password-reset:'+bizId, JSON.stringify({code, email, createdAt:new Date().toISOString()}));
+
+  if(window.emailjs && window._EMAILJS_READY){
+    try{
+      await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_TEMPLATE_ID, {
+        to_email: email,
+        code: code,
+        business_name: biz.name
+      });
+    }catch(e){
+      console.error('emailjs send failed', e);
+      toast('تعذّر إرسال البريد، جرب مرة ثانية');
+      return;
+    }
+  }
+
+  renderPasswordResetStep(bizId, email);
+}
+
+function renderPasswordResetStep(bizId, email){
+  const overlay = document.querySelector('.modal-overlay');
+  if(!overlay) return;
+  overlay.querySelector('.modal-box').innerHTML = `
+    <div class="modal-icon" style="background:var(--accent-light); color:var(--primary-dark);">📩</div>
+    <h3>أدخل الرمز وكلمة المرور الجديدة</h3>
+    <p>أرسلنا رمز مكوّن من 6 أرقام إلى <strong dir="ltr">${escapeHTML(email)}</strong>.</p>
+    <label style="text-align:right; display:block;">الرمز</label>
+    <input type="text" id="fpCode" placeholder="000000" dir="ltr" inputmode="numeric" maxlength="6" style="text-align:center; letter-spacing:4px; font-weight:800;">
+    <label style="text-align:right; display:block; margin-top:10px;">كلمة المرور الجديدة</label>
+    <input type="password" id="fpNewPass" placeholder="8 خانات على الأقل">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="fpCloseBtn2">إغلاق</button>
+      <button class="btn btn-primary" onclick="confirmPasswordReset('${bizId}')">تغيير كلمة المرور</button>
+    </div>
+  `;
+  overlay.querySelector('#fpCloseBtn2').onclick = () => document.body.removeChild(overlay);
+}
+
+async function confirmPasswordReset(bizId){
+  const code = (document.getElementById('fpCode').value || '').trim();
+  const newPass = document.getElementById('fpNewPass').value;
+  if(!code){ toast('اكتب الرمز المرسل لبريدك'); return; }
+  if(!newPass || newPass.length < 8){ toast('كلمة المرور لازم تكون 8 خانات على الأقل'); return; }
+
+  const raw = await storageGet('password-reset:'+bizId);
+  if(!raw){ toast('انتهت صلاحية الرمز، اطلب رمز جديد'); return; }
+  const data = JSON.parse(raw);
+  if(code !== data.code){ toast('الرمز غير صحيح'); return; }
+
+  const bizRaw = await storageGet('business:'+bizId);
+  if(!bizRaw){ toast('تعذّر إيجاد الحساب'); return; }
+  const biz = JSON.parse(bizRaw);
+  biz.password = newPass;
+  await storageSet('business:'+bizId, JSON.stringify(biz));
+  await storageDelete('password-reset:'+bizId);
+
+  toast('تم تغيير كلمة المرور ✅ سجّل دخولك الآن');
+  const overlay = document.querySelector('.modal-overlay');
+  if(overlay) document.body.removeChild(overlay);
 }
 
 function showConfirmModal(title, message, confirmLabel, onConfirm){
@@ -865,6 +938,12 @@ function goToApp(mode){
 }
 
 function backToLanding(){
+  // لو المستخدم داخل قسم الإدارة، رجّعه للوحة الإدارة الرئيسية بدل ما نطرده لصفحة الهبوط العامة
+  // (صفحة الهبوط ما فيها رابط يرجعه للإدارة، فكان يعلق هناك لين يسوي رفرش)
+  if(currentTab === 'admin' && adminAuthed){
+    renderAdminPanel();
+    return;
+  }
   document.getElementById('landingView').classList.remove('hidden');
   const waFloat = document.getElementById('lpWaFloat');
   if(waFloat) waFloat.classList.remove('hidden');
@@ -1026,7 +1105,7 @@ function renderMerchantRegister(){
   document.getElementById('merchantView').innerHTML = `
     <div class="card">
       <div class="eyebrow">صاحب العمل</div>
-      <h3>أنشئ حساب محلك</h3>
+      <h3>أنشئ حساب عملك</h3>
       <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">دقيقة واحدة. بعدها تُدخل كود التفعيل الذي تستلمه منّا ويفتح النظام.</p>
       <label>اسم المحل</label>
       <input type="text" id="regBizName" placeholder="مثال: مطعم النخيل">
@@ -1315,7 +1394,7 @@ async function renderMerchantDashboard(){
     <div class="card">
       <div class="eyebrow">انضمام الزبائن</div>
       <h3>📌 رابط + QR للملصق</h3>
-      <p style="font-size:13px; color:var(--muted); line-height:1.7;">اطبع رمز الـQR هذا وحطه بمحلك — الزبون يصوره بكاميرا جواله عادي وتفتح له بطاقته مباشرة، بدون تنزيل تطبيق.</p>
+      <p style="font-size:13px; color:var(--muted); line-height:1.7;">اطبع رمز الـQR هذا وحطه بعملك — الزبون يصوره بكاميرا جواله عادي وتفتح له بطاقته مباشرة، بدون تنزيل تطبيق.</p>
       <div class="qr-wrap" id="joinQr"></div>
       <div class="link-box"><input type="text" readonly value="${joinLink}" id="joinLinkInput" onclick="this.select()" onfocus="this.select()"><button class="icon-btn" onclick="copyText(document.getElementById('joinLinkInput').value, document.getElementById('joinLinkInput'))">📋</button></div>
     </div>
