@@ -706,16 +706,6 @@ async function init(){
     await renderStaffScanner(bizId);
     return;
   }
-  if(mode==='admin'){
-    document.getElementById('landingView').classList.add('hidden');
-    document.getElementById('mainTabs').classList.add('hidden');
-    document.getElementById('merchantView').classList.add('hidden');
-    document.getElementById('customerView').classList.add('hidden');
-    document.getElementById('adminView').classList.remove('hidden');
-    renderAdminLogin();
-    return;
-  }
-
   // استرجاع جلسة صاحب العمل المحفوظة (تبقى لين يسوي خروج يدوي)
   const savedBizId = loadBizSessionId();
   if(savedBizId){
@@ -727,8 +717,18 @@ async function init(){
       clearBizSession();
     }
   }
-  // استرجاع جلسة الإدارة المحفوظة
+  // استرجاع جلسة الإدارة المحفوظة (لازم تصير قبل التعامل مع mode=admin عشان الرفرش ما يسجل خروج)
   if(isAdminSessionSaved()){ adminAuthed = true; }
+
+  if(mode==='admin'){
+    document.getElementById('landingView').classList.add('hidden');
+    document.getElementById('mainTabs').classList.add('hidden');
+    document.getElementById('merchantView').classList.add('hidden');
+    document.getElementById('customerView').classList.add('hidden');
+    document.getElementById('adminView').classList.remove('hidden');
+    renderAdminLogin();
+    return;
+  }
 
   if(currentBiz){
     // فيه جلسة محفوظة، ندخل مباشرة للوحة بدون المرور بصفحة الهبوط
@@ -1961,8 +1961,15 @@ async function renderAdminPartners(){
       <p style="font-size:12.5px; color:var(--muted);">هذا القسم يظهر بصفحة الهبوط. ضيف اسم كل شريك ورابط صورة شعاره (لوغو).</p>
       <label>اسم الشريك</label>
       <input type="text" id="pName" placeholder="مثال: مطعم النخيل">
-      <label>رابط صورة الشعار</label>
-      <input type="text" id="pLogo" placeholder="https://..." dir="ltr">
+      <label>صورة الشعار</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('pLogoFile').click()">🖼️ اختر من معرض الصور</button>
+        <span id="pLogoFileName" style="font-size:12px; color:var(--muted);">ما اخترت صورة بعد</span>
+      </div>
+      <input type="file" id="pLogoFile" accept="image/*" style="display:none;" onchange="handlePartnerLogoFile(event)">
+      <img id="pLogoPreview" style="display:none; width:56px; height:56px; object-fit:contain; border-radius:12px; border:1px solid var(--border); background:#fff; margin-top:8px;">
+      <label style="margin-top:12px;">أو الصق رابط صورة (اختياري)</label>
+      <input type="text" id="pLogo" placeholder="https://..." dir="ltr" oninput="document.getElementById('pLogoFileName').textContent='';">
       <button class="btn btn-accent" style="margin-top:14px;" onclick="adminAddPartner()">➕ إضافة</button>
     </div>
     <div class="card">
@@ -1979,14 +1986,53 @@ async function renderAdminPartners(){
   `;
 }
 
+let pLogoDataUrl = '';
+function handlePartnerLogoFile(event){
+  const file = event.target.files && event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      // نصغّر الصورة لحجم معقول (128x128) عشان الحجم يبقى خفيف
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0,0,size,size);
+      const scale = Math.min(size/img.width, size/img.height);
+      const w = img.width*scale, h = img.height*scale;
+      ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+      pLogoDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      document.getElementById('pLogoFileName').textContent = file.name;
+      const preview = document.getElementById('pLogoPreview');
+      preview.src = pLogoDataUrl;
+      preview.style.display = 'block';
+      document.getElementById('pLogo').value = '';
+    };
+    img.onerror = function(){ toast('تعذّر قراءة الصورة، جرب صورة ثانية'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function(){ toast('تعذّر فتح الملف'); };
+  reader.readAsDataURL(file);
+}
+
 async function adminAddPartner(){
   const name = document.getElementById('pName').value.trim();
-  const logo = document.getElementById('pLogo').value.trim();
-  if(!name || !logo){ toast('اكتب الاسم ورابط الشعار'); return; }
+  const logoUrl = document.getElementById('pLogo').value.trim();
+  const logo = pLogoDataUrl || logoUrl;
+  if(!name || !logo){ toast('اكتب الاسم واختر صورة الشعار أو الصق رابط'); return; }
   const raw = await storageGet('partners-list');
   const partners = raw ? JSON.parse(raw) : [];
   partners.push({name, logo});
-  await storageSet('partners-list', JSON.stringify(partners));
+  try{
+    await storageSet('partners-list', JSON.stringify(partners));
+  }catch(e){
+    toast('الصورة كبيرة الحجم، جرب صورة أصغر أو رابط بدالها');
+    return;
+  }
+  pLogoDataUrl = '';
   toast('تمت الإضافة ✅');
   renderAdminPartners();
 }
