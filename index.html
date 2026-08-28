@@ -1059,6 +1059,7 @@ const IRAQ_CITIES = ['بغداد','البصرة','نينوى (الموصل)','أ
 
 function renderMerchantEntry(){
   if(currentBiz){ renderMerchantDashboard(); return; }
+  if(loadPendingRegistration()){ renderEmailCodeGate(); return; }
   renderMerchantLogin();
 }
 
@@ -1104,32 +1105,44 @@ async function merchantLogin(){
 }
 
 /* -------- إنشاء حساب جديد -------- */
-function renderMerchantRegister(){
+function renderMerchantRegister(prefill){
+  const p = prefill || {};
   document.getElementById('merchantView').innerHTML = `
     <div class="card">
       <div class="eyebrow">صاحب العمل</div>
       <h3>أنشئ حساب عملك</h3>
       <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">دقيقة واحدة. بعدها تُدخل كود التفعيل الذي تستلمه منّا ويفتح النظام.</p>
       <label>اسم المحل</label>
-      <input type="text" id="regBizName" placeholder="مثال: مطعم النخيل">
+      <input type="text" id="regBizName" placeholder="مثال: مطعم النخيل" value="${escapeHTML(p.name||'')}">
       <label>اسم صاحب المحل</label>
-      <input type="text" id="regOwnerName" placeholder="الاسم الكامل">
+      <input type="text" id="regOwnerName" placeholder="الاسم الكامل" value="${escapeHTML(p.ownerName||'')}">
       <label>رقم الهاتف</label>
-      <input type="tel" id="regPhone" placeholder="07xxxxxxxxx" dir="ltr">
+      <input type="tel" id="regPhone" placeholder="07xxxxxxxxx" dir="ltr" value="${escapeHTML(p.phone||'')}">
       <label>المدينة</label>
       <select id="regCity">
         <option value="">اختر المدينة</option>
-        ${IRAQ_CITIES.map(c=>`<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('')}
+        ${IRAQ_CITIES.map(c=>`<option value="${escapeHTML(c)}" ${p.city===c?'selected':''}>${escapeHTML(c)}</option>`).join('')}
       </select>
       <label>البريد الإلكتروني</label>
-      <input type="text" id="regEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
-      <div class="note" style="margin-top:6px;">سنستخدمه لتسجيل دخولك ولاستعادة كلمة المرور.</div>
+      <input type="text" id="regEmail" placeholder="you@example.com" dir="ltr" inputmode="email" value="${escapeHTML(p.email||'')}">
+      <div class="note" style="margin-top:6px;">سنستخدمه لتسجيل دخولك ولاستعادة كلمة المرور. تأكد إنه صحيح — بدونه ما توصلك رسالة التفعيل.</div>
       <label>كلمة المرور</label>
-      <input type="password" id="regPassword" placeholder="8 خانات على الأقل">
+      <input type="password" id="regPassword" placeholder="8 خانات على الأقل" value="${escapeHTML(p.password||'')}">
       <button class="btn btn-accent" style="margin-top:16px;" onclick="registerBusiness()">إنشاء الحساب</button>
       <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;">عندك حساب؟ <button class="link-btn" onclick="renderMerchantLogin()">سجّل دخولك</button></div>
     </div>
   `;
+}
+
+/* -------- تخزين مؤقت لبيانات التسجيل لين يتأكد الإيميل (ما نسجل بقاعدة البيانات قبل التأكيد) -------- */
+function savePendingRegistration(obj){
+  try{ localStorage.setItem('wala_pending_reg', JSON.stringify(obj)); }catch(e){}
+}
+function loadPendingRegistration(){
+  try{ const raw = localStorage.getItem('wala_pending_reg'); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+function clearPendingRegistration(){
+  try{ localStorage.removeItem('wala_pending_reg'); }catch(e){}
 }
 
 async function registerBusiness(){
@@ -1152,34 +1165,32 @@ async function registerBusiness(){
   const existingEmail = await storageGet('email-index:'+email);
   if(existingEmail){ toast('هذا البريد مستخدم مسبقاً لحساب آخر'); return; }
 
-  const idxRaw = await storageGet('businesses-index');
-  let index = idxRaw ? JSON.parse(idxRaw) : [];
-  const finalId = phone; // رقم الهاتف نفسه هو معرّف الحساب داخلياً
-
-  const biz = {
-    id:finalId, phone:finalId, name, ownerName, city, email, password,
-    category:'other', primary:'#1F4B3F', accent:'#B98B3E', threshold:6,
-    rewardText:'مكافأة بعد 6 زيارات', offers:[],
-    createdAt:new Date().toISOString(),
-    subscriptionStatus:'pending_email', subscriptionUntil:null
+  // ما نسجل أي شي بقاعدة البيانات الآن — بس نخزن البيانات مؤقتاً لين يتأكد الإيميل بالكود
+  const pending = {
+    name, ownerName, phone, city, email, password,
+    code: generateSixDigitCode(),
+    createdAt: new Date().toISOString()
   };
-  _storageDegraded = false;
-  const ok = await storageSet('business:'+finalId, JSON.stringify(biz));
-  if(!ok || _storageDegraded){
-    toast('⚠️ تعذّر الحفظ الدائم الآن. تأكد من اتصال الإنترنت وحاول التسجيل مرة ثانية');
-    return;
-  }
-  if(!index.includes(finalId)){ index.push(finalId); }
-  await storageSet('businesses-index', JSON.stringify(index));
-  await storageSet('customers-index:'+finalId, JSON.stringify([]));
-  await storageSet('email-index:'+email, finalId);
+  savePendingRegistration(pending);
 
-  currentBiz = biz;
-  document.getElementById('logoutBtn').classList.remove('hidden');
-  saveBizSession(finalId);
-  toast('تم إنشاء حسابك 🎉');
-  await sendEmailVerificationCode(biz);
+  const sent = await sendVerificationCodeEmail(email, pending.code, name);
+  if(!sent){ toast('تعذّر إرسال البريد، جرب "إعادة الإرسال" بعد شوي'); }
   renderEmailCodeGate();
+}
+
+async function sendVerificationCodeEmail(email, code, bizName){
+  if(!(window.emailjs && window._EMAILJS_READY)) return false;
+  try{
+    await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_TEMPLATE_ID, {
+      to_email: email,
+      code: code,
+      business_name: bizName
+    });
+    return true;
+  }catch(e){
+    console.error('emailjs send failed', e);
+    return false;
+  }
 }
 
 /* -------- إرسال والتحقق من كود البريد الإلكتروني (يفتح شهر مجاني) -------- */
@@ -1187,65 +1198,79 @@ function generateSixDigitCode(){
   return String(Math.floor(100000 + Math.random()*900000));
 }
 
-async function sendEmailVerificationCode(biz){
-  const code = generateSixDigitCode();
-  await storageSet('email-verify:'+biz.id, JSON.stringify({code, createdAt:new Date().toISOString()}));
-
-  if(window.emailjs && window._EMAILJS_READY){
-    try{
-      await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_TEMPLATE_ID, {
-        to_email: biz.email,
-        code: code,
-        business_name: biz.name
-      });
-    }catch(e){
-      console.error('emailjs send failed', e);
-      toast('تعذّر إرسال البريد، جرب "إعادة الإرسال" بعد شوي');
-    }
-  } else {
-    // خدمة الإيميل لسا ما انربطت (شغل تجريبي) — نعرض الكود مباشرة عشان ما يوقف التسجيل
-    console.warn('EmailJS not configured — showing code on screen as fallback');
-  }
-}
-
 function renderEmailCodeGate(){
-  const b = currentBiz;
+  const p = loadPendingRegistration();
+  if(!p){ renderMerchantLogin(); return; }
   document.getElementById('merchantView').innerHTML = `
     <div class="card" style="text-align:center;">
       <div style="font-size:34px;">📩</div>
       <h3 style="margin:10px 0 4px;">أدخل كود التحقق</h3>
-      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">أرسلنا كود مكوّن من 6 أرقام إلى بريدك <strong dir="ltr">${escapeHTML(b.email)}</strong>. افتح بريدك، خذ الكود، واكتبه هنا — وراح تحصل على شهر مجاني فوراً 🎁</p>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">أرسلنا كود مكوّن من 6 أرقام إلى بريدك <strong dir="ltr">${escapeHTML(p.email)}</strong>. افتح بريدك، خذ الكود، واكتبه هنا — وراح تحصل على شهر مجاني فوراً 🎁</p>
       <input type="text" id="emailCodeInput" placeholder="000000" dir="ltr" inputmode="numeric" maxlength="6" style="text-align:center; font-weight:800; letter-spacing:4px; font-size:20px;">
       <button class="btn btn-primary" style="margin-top:16px;" onclick="verifyEmailCode()">✅ تحقق وابدأ</button>
       <button class="link-btn" style="margin-top:12px;" onclick="resendEmailCode()">لم يوصلني الكود — أعد الإرسال</button>
+      <div class="foot-link" style="margin-top:10px; font-size:12.5px; text-align:center;">كتبت بريدك غلط؟ <button class="link-btn" onclick="renderMerchantRegister(loadPendingRegistration())">رجوع وتعديل البيانات</button></div>
       <div>
-        <button class="link-btn" style="margin-top:16px; color:var(--danger);" onclick="logout()">تسجيل الخروج</button>
+        <button class="link-btn" style="margin-top:16px; color:var(--danger);" onclick="cancelPendingRegistration()">إلغاء التسجيل</button>
       </div>
       ${!window._EMAILJS_READY ? `<div class="note" style="margin-top:14px; text-align:right;">⚠️ خدمة إرسال البريد لسا ما انربطت بالموقع (EmailJS). لين تربطها، تقدر تشوف الكود من إعدادات المطوّر أو تتواصل وياك يدوياً.</div>` : ''}
     </div>
   `;
 }
 
+function cancelPendingRegistration(){
+  clearPendingRegistration();
+  renderMerchantLogin();
+}
+
 async function resendEmailCode(){
-  await sendEmailVerificationCode(currentBiz);
-  toast('تم إعادة إرسال الكود 📩');
+  const p = loadPendingRegistration();
+  if(!p){ toast('انتهت الجلسة، سجل من جديد'); renderMerchantLogin(); return; }
+  p.code = generateSixDigitCode();
+  savePendingRegistration(p);
+  const sent = await sendVerificationCodeEmail(p.email, p.code, p.name);
+  toast(sent ? 'تم إعادة إرسال الكود 📩' : 'تعذّر إرسال البريد، جرب مرة ثانية');
 }
 
 async function verifyEmailCode(){
   const input = (document.getElementById('emailCodeInput').value || '').trim();
   if(!input){ toast('اكتب الكود المرسل لبريدك'); return; }
-  const raw = await storageGet('email-verify:'+currentBiz.id);
-  if(!raw){ toast('انتهت صلاحية الكود، اضغط "أعد الإرسال"'); return; }
-  const data = JSON.parse(raw);
-  if(input !== data.code){ toast('الكود غير صحيح'); return; }
+  const p = loadPendingRegistration();
+  if(!p){ toast('انتهت الجلسة، سجل من جديد'); renderMerchantLogin(); return; }
+  if(input !== p.code){ toast('الكود غير صحيح'); return; }
+
+  // الكود صحيح — الحين بس ننشئ الحساب فعلياً بقاعدة البيانات
+  const existingPhone = await storageGet('business:'+p.phone);
+  if(existingPhone){ toast('هذا الرقم اتسجل من جهاز ثاني بالفتره اللي انتظرت فيها، جرب تسجيل الدخول'); clearPendingRegistration(); renderMerchantLogin(); return; }
 
   const until = new Date();
   until.setDate(until.getDate() + 30); // شهر مجاني بعد التحقق
 
-  currentBiz.subscriptionStatus = 'trial';
-  currentBiz.subscriptionUntil = until.toISOString();
-  await storageSet('business:'+currentBiz.id, JSON.stringify(currentBiz));
-  await storageDelete('email-verify:'+currentBiz.id);
+  const biz = {
+    id:p.phone, phone:p.phone, name:p.name, ownerName:p.ownerName, city:p.city, email:p.email, password:p.password,
+    category:'other', primary:'#1F4B3F', accent:'#B98B3E', threshold:6,
+    rewardText:'مكافأة بعد 6 زيارات', offers:[],
+    createdAt:new Date().toISOString(),
+    subscriptionStatus:'trial', subscriptionUntil:until.toISOString()
+  };
+
+  _storageDegraded = false;
+  const ok = await storageSet('business:'+p.phone, JSON.stringify(biz));
+  if(!ok || _storageDegraded){
+    toast('⚠️ تعذّر الحفظ الدائم الآن. تأكد من اتصال الإنترنت وحاول تضغط "تحقق" مرة ثانية');
+    return;
+  }
+  const idxRaw = await storageGet('businesses-index');
+  let index = idxRaw ? JSON.parse(idxRaw) : [];
+  if(!index.includes(p.phone)){ index.push(p.phone); }
+  await storageSet('businesses-index', JSON.stringify(index));
+  await storageSet('customers-index:'+p.phone, JSON.stringify([]));
+  await storageSet('email-index:'+p.email, p.phone);
+
+  currentBiz = biz;
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  saveBizSession(p.phone);
+  clearPendingRegistration();
 
   toast('🎉 تم التحقق! عندك شهر مجاني كامل');
   renderMerchantDashboard();
@@ -1327,11 +1352,6 @@ function renderTrialExpired(){
 }
 
 async function renderMerchantDashboard(){
-  // لو الحساب لسا يستنى تحقق البريد الإلكتروني (تسجيل جديد)
-  if(currentBiz.subscriptionStatus === 'pending_email'){
-    renderEmailCodeGate();
-    return;
-  }
   // فحص انتهاء الاشتراك (تجريبي أو فعّال منتهي) أول شي قبل عرض أي بيانات
   if((currentBiz.subscriptionStatus === 'trial' || currentBiz.subscriptionStatus === 'active') && currentBiz.subscriptionUntil){
     const daysLeft = Math.ceil((new Date(currentBiz.subscriptionUntil) - new Date()) / (1000*60*60*24));
