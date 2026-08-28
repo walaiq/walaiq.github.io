@@ -238,11 +238,13 @@
   .price-list{text-align:right; display:flex; flex-direction:column; gap:10px; margin-bottom:22px; font-size:13px;}
   .price-list div{display:flex; gap:8px; align-items:flex-start; line-height:1.6;}
   .price-list div::before{content:'✓'; color:var(--accent); font-weight:900; flex-shrink:0;}
-  .partners-row{display:flex; gap:14px; overflow-x:auto; padding:4px 2px;}
-  .partner-item{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; width:76px;}
-  .partner-item img{width:56px; height:56px; border-radius:16px; object-fit:contain; background:#fff; border:1px solid var(--border); animation:partnerBounce 3s ease-in-out infinite;}
+  .partners-viewport{overflow:hidden; width:100%; padding:6px 0; position:relative; -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}
+  .partners-row{display:flex; gap:20px; width:max-content; direction:ltr; animation:partnersMarquee 22s linear infinite;}
+  .partners-row:hover{animation-play-state:paused;}
+  .partner-item{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; width:92px;}
+  .partner-item img{width:80px; height:80px; border-radius:50%; object-fit:cover; background:#fff; border:2px solid var(--accent-light); box-shadow:0 4px 12px -4px rgba(20,40,32,.2);}
   .partner-item span{font-size:10.5px; color:var(--muted); text-align:center;}
-  @keyframes partnerBounce{0%,100%{transform:translateY(0);} 50%{transform:translateY(-5px);}}
+  @keyframes partnersMarquee{0%{transform:translateX(0);} 100%{transform:translateX(-50%);}}
   .testi-card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; box-shadow:0 4px 12px -8px rgba(20,40,32,.08);}
   .testi-card p{font-size:13.5px; line-height:1.75;}
   .testi-card strong{display:block; margin-top:8px; font-size:12px; color:var(--primary);}
@@ -427,13 +429,13 @@
         <div class="lp-section-eyebrow">شركاؤنا</div>
         <h2 class="lp-section-h2">أعمال تثق بولاء</h2>
       </div>
-      <div class="partners-row" id="partnersRow"></div>
+      <div class="partners-viewport"><div class="partners-row" id="partnersRow"></div></div>
     </div>
 
     <div class="lp-section" id="testimonialsSection" style="display:none;">
       <div class="lp-section-title">
         <div class="lp-section-eyebrow">آراء عملائنا</div>
-        <h2 class="lp-section-h2">وش يقولون عن ولاء</h2>
+        <h2 class="lp-section-h2">شنو يقولون عن ولاء</h2>
       </div>
       <div id="testimonialsRow" style="display:flex; flex-direction:column; gap:12px;"></div>
     </div>
@@ -441,7 +443,7 @@
     <div class="lp-section">
       <div class="lp-section-title">
         <div class="lp-section-eyebrow">أسئلة شائعة</div>
-        <h2 class="lp-section-h2">كل شي تبي تعرفه</h2>
+        <h2 class="lp-section-h2">كل شي تريد تعرفه</h2>
       </div>
       <div class="faq-list">
         <div class="faq-item">
@@ -457,7 +459,7 @@
           <div class="faq-a">لا، تقدر تلغي اشتراكك بأي وقت. وأول شهر مجاني بالكامل بدون أي بطاقة دفع.</div>
         </div>
         <div class="faq-item">
-          <button class="faq-q" onclick="toggleFaq(this)">وش يصير ببياناتي لو قررت أوقف؟ <span>+</span></button>
+          <button class="faq-q" onclick="toggleFaq(this)">شنو يصير ببياناتي لو قررت أوقف؟ <span>+</span></button>
           <div class="faq-a">بياناتك تبقى محفوظة، وتقدر تصدّر نسخة احتياطية كاملة من لوحة تحكمك بأي وقت.</div>
         </div>
       </div>
@@ -780,7 +782,12 @@ async function loadLandingExtras(){
     const pSection = document.getElementById('partnersSection');
     const pRow = document.getElementById('partnersRow');
     if(partners.length > 0 && pRow){
-      pRow.innerHTML = partners.map(p=>`<div class="partner-item"><img src="${escapeHTML(p.logo)}" onerror="this.style.display='none'"><span>${escapeHTML(p.name)}</span></div>`).join('');
+      const itemHtml = p => `<div class="partner-item"><img src="${escapeHTML(p.logo)}" onerror="this.style.display='none'"><span>${escapeHTML(p.name)}</span></div>`;
+      // نكرر القائمة مرتين عشان الحركة تكون متواصلة بدون فراغ لما تنتهي دورة وتبدأ ثانية
+      pRow.innerHTML = partners.map(itemHtml).join('') + partners.map(itemHtml).join('');
+      // كل ما زاد عدد الشركاء نزيد مدة الدورة عشان السرعة تبقى ثابتة ومريحة للعين
+      const duration = Math.max(14, partners.length * 5);
+      pRow.style.animationDuration = duration + 's';
       pSection.style.display = '';
     } else if(pSection){ pSection.style.display = 'none'; }
   }catch(e){}
@@ -1416,7 +1423,7 @@ function renderWhatsappSendList(){
   if(!wrap) return;
   wrap.innerHTML = `
     <div class="eyebrow" style="margin-top:18px;">📲 إرسال فعلي عبر واتساب (اختياري)</div>
-    <p style="font-size:12.5px; color:var(--muted); line-height:1.7; margin-bottom:10px;">الإشعار داخل التطبيق يوصل تلقائياً لما الزبون يفتح بطاقته. لو تبي توصله مباشرة على واتساب، اضغط كل زر يفتح لك محادثة جاهزة بنفس الرسالة — بس اضغط "إرسال".</p>
+    <p style="font-size:12.5px; color:var(--muted); line-height:1.7; margin-bottom:10px;">الإشعار داخل التطبيق يوصل تلقائياً لما الزبون يفتح بطاقته. لو تريد توصله مباشرة على واتساب، اضغط كل زر يفتح لك محادثة جاهزة بنفس الرسالة — بس اضغط "إرسال".</p>
     ${targets.map(t => `
       <a href="${whatsappLink(t.phone, text)}" target="_blank" rel="noopener" class="btn btn-ghost" style="text-decoration:none; margin-bottom:8px; justify-content:space-between; display:flex;">
         <span>💬 ${escapeHTML(t.name)}</span><span style="direction:ltr;">${escapeHTML(t.phone)}</span>
