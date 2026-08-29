@@ -595,6 +595,30 @@ async function deleteBusinessDoc(bizId){
   try{ await _db.collection('businesses').doc(bizId).delete(); return true; }catch(e){ console.error(e); return false; }
 }
 
+/* ================= آراء أصحاب الأعمال (Collection مستقلة، كل محل رأيه الخاص) ================= */
+async function getMyTestimonial(bizId){
+  if(!_db) return null;
+  try{
+    const doc = await _db.collection('testimonials').doc(bizId).get();
+    return doc.exists ? doc.data() : null;
+  }catch(e){ console.error('getMyTestimonial failed', e); return null; }
+}
+async function saveMyTestimonial(bizId, data){
+  if(!_db) return false;
+  try{ await _db.collection('testimonials').doc(bizId).set(data); return true; }catch(e){ console.error('saveMyTestimonial failed', e); return false; }
+}
+async function deleteMyTestimonial(bizId){
+  if(!_db) return false;
+  try{ await _db.collection('testimonials').doc(bizId).delete(); return true; }catch(e){ console.error(e); return false; }
+}
+async function listBizTestimonials(){
+  if(!_db) return [];
+  try{
+    const snap = await _db.collection('testimonials').get();
+    return snap.docs.map(d => Object.assign({bizId:d.id}, d.data()));
+  }catch(e){ console.error('listBizTestimonials failed', e); return []; }
+}
+
 async function getCustomer(bizId, custPhone){
   if(!_db) return null;
   try{
@@ -998,7 +1022,9 @@ async function loadLandingExtras(){
   }catch(e){}
   try{
     const tRaw = await storageGet('testimonials-list');
-    const items = tRaw ? JSON.parse(tRaw) : [];
+    const legacyItems = tRaw ? JSON.parse(tRaw) : [];
+    const bizItems = await listBizTestimonials();
+    const items = [...legacyItems, ...bizItems.map(t => ({name:t.bizName, text:t.text}))];
     const tSection = document.getElementById('testimonialsSection');
     const tRow = document.getElementById('testimonialsRow');
     if(items.length > 0 && tRow){
@@ -1348,6 +1374,7 @@ async function loadAllCustomers(bizId){
 function customerSegments(customers, threshold){
   const today = new Date();
   const todayMD = today.getMonth()+'-'+today.getDate();
+  const THIRTY_DAYS = 30*24*60*60*1000;
   return {
     all: customers,
     new: customers.filter(c => (c.points||0) === 0),
@@ -1356,6 +1383,11 @@ function customerSegments(customers, threshold){
       if(!c.birthday) return false;
       const d = new Date(c.birthday);
       return (d.getMonth()+'-'+d.getDate()) === todayMD;
+    }),
+    inactive30: customers.filter(c => {
+      if((c.points||0) === 0) return false; // زبون جديد ما زار بعد، مو "غائب"
+      const lastSeen = new Date(c.lastVisitAt || c.joinedAt || 0);
+      return (today - lastSeen) >= THIRTY_DAYS;
     })
   };
 }
@@ -1384,6 +1416,92 @@ function renderTrialExpired(){
   `;
 }
 
+async function renderMerchantStats(chartDays){
+  chartDays = chartDays || 7;
+  const area = document.getElementById('merchantView');
+  area.innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري تحميل الإحصائيات...</p></div>`;
+
+  const {list:customers} = await loadAllCustomers(currentBiz.id);
+  const stamps30 = await listRecentStamps(currentBiz.id, 30);
+  const now = new Date();
+
+  const totalCustomers = customers.length;
+  const newCustomers30 = customers.filter(c => (now - new Date(c.joinedAt||0)) <= 30*24*60*60*1000).length;
+  const allTimeVisits = customers.reduce((s,c)=> s + (c.totalVisits||0), 0);
+  const allTimeRewards = customers.reduce((s,c)=> s + (c.totalRewards||0), 0);
+  const returningCount = customers.filter(c => (c.totalVisits||0) >= 2).length;
+  const returningRate = totalCustomers > 0 ? Math.round((returningCount/totalCustomers)*100) : 0;
+  const topCustomers = customers.slice().sort((a,b)=>(b.totalVisits||0)-(a.totalVisits||0)).slice(0,5).filter(c=>(c.totalVisits||0)>0);
+
+  // تجهيز بيانات الرسم البياني (زيارات كل يوم لآخر 7 أو 30 يوم)
+  const dayBuckets = {};
+  for(let i=chartDays-1; i>=0; i--){
+    const d = new Date(); d.setDate(d.getDate()-i); d.setHours(0,0,0,0);
+    dayBuckets[d.toISOString().slice(0,10)] = 0;
+  }
+  const cutoffChart = new Date(); cutoffChart.setDate(cutoffChart.getDate()-chartDays);
+  stamps30.filter(s => new Date(s.time) >= cutoffChart).forEach(s => {
+    const key = s.time.slice(0,10);
+    if(key in dayBuckets) dayBuckets[key]++;
+  });
+  const maxVal = Math.max(1, ...Object.values(dayBuckets));
+  const barsHTML = Object.entries(dayBuckets).map(([date, count]) => {
+    const h = Math.max(4, Math.round((count/maxVal)*90));
+    const d = new Date(date);
+    const dayLabel = chartDays===7 ? d.toLocaleDateString('ar', {weekday:'short'}) : d.getDate();
+    return `
+      <div style="display:flex; flex-direction:column; align-items:center; flex:1; gap:4px;">
+        <div style="font-size:10px; color:var(--muted);">${count>0?count:''}</div>
+        <div style="width:70%; height:90px; display:flex; align-items:flex-end;">
+          <div style="width:100%; height:${h}px; background:var(--primary); border-radius:4px 4px 0 0;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--muted);">${dayLabel}</div>
+      </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <h3 style="margin:0;">📊 لوحة الإحصائيات</h3>
+      <button class="link-btn" onclick="renderMerchantDashboard()">رجوع</button>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box tone-family"><div class="num">${totalCustomers}</div><div class="lbl">👥 عملاء</div></div>
+      <div class="stat-box tone-sky"><div class="num">${newCustomers30}</div><div class="lbl">🆕 عملاء جدد (30 يوم)</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box tone-accent"><div class="num">${allTimeVisits}</div><div class="lbl">🔄 زيارات إجمالية</div></div>
+      <div class="stat-box tone-family"><div class="num">${allTimeRewards}</div><div class="lbl">🎁 مكافآت مُنحت</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box tone-sky" style="flex:1;"><div class="num">${returningRate}%</div><div class="lbl">📈 العملاء العائدون (زاروا مرتين أو أكثر)</div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h3 style="margin:0;">الزيارات</h3>
+        <div style="display:flex; gap:6px;">
+          <button class="btn ${chartDays===7?'btn-primary':'btn-ghost'} btn-sm" onclick="renderMerchantStats(7)">7 أيام</button>
+          <button class="btn ${chartDays===30?'btn-primary':'btn-ghost'} btn-sm" onclick="renderMerchantStats(30)">30 يوم</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:${chartDays===30?'2px':'8px'}; margin-top:16px; overflow-x:auto;">
+        ${barsHTML}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>⭐ أكثر العملاء زيارة</h3>
+      ${topCustomers.length===0 ? `<div class="empty"><span class="icon">⭐</span><p>ما فيه بيانات كافية بعد</p></div>` : topCustomers.map((c,i)=>`
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13.5px;">
+          <span>${['🥇','🥈','🥉','4.','5.'][i]} ${escapeHTML(c.name)}</span>
+          <span style="color:var(--muted); font-size:12px;">${c.totalVisits} زيارة</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function renderMerchantDashboard(){
   // فحص انتهاء الاشتراك (تجريبي أو فعّال منتهي) أول شي قبل عرض أي بيانات
   if((currentBiz.subscriptionStatus === 'trial' || currentBiz.subscriptionStatus === 'active') && currentBiz.subscriptionUntil){
@@ -1401,6 +1519,7 @@ async function renderMerchantDashboard(){
   const {list:customers} = await loadAllCustomers(currentBiz.id);
   let totalStamps = 0; customers.forEach(c=>totalStamps+=(c.points||0));
   const broadcasts = currentBiz.broadcasts || [];
+  const myTestimonial = await getMyTestimonial(currentBiz.id);
 
   let trialNote = '';
   if(currentBiz.subscriptionStatus === 'trial' && currentBiz.subscriptionUntil){
@@ -1439,6 +1558,10 @@ async function renderMerchantDashboard(){
       <div class="stat-box tone-accent"><div class="num">${totalStamps}</div><div class="lbl">ختم إجمالي</div></div>
     </div>
 
+    <button class="btn btn-ghost" style="width:100%;" onclick="renderMerchantStats()">📊 لوحة الإحصائيات الكاملة</button>
+
+    ${smartSuggestionsHTML(customers, currentBiz)}
+
     <div class="card">
       <div class="eyebrow">بطاقتك</div>
       <h3>معاينة البطاقة</h3>
@@ -1459,6 +1582,7 @@ async function renderMerchantDashboard(){
       <h3>📷 رابط الماسح</h3>
       <p style="font-size:13px; color:var(--muted); line-height:1.7;">شارك هذا الرابط مع موظفينك — يفتحونه بجوالاتهم ويقدرون يضيفون ختم لأي زبون بإدخال رقمه، بدون تسجيل دخول لحسابك.</p>
       <div class="link-box"><input type="text" readonly value="${scanLink}" id="scanLinkInput" onclick="this.select()" onfocus="this.select()"><button class="icon-btn" onclick="copyText(document.getElementById('scanLinkInput').value, document.getElementById('scanLinkInput'))">📋</button></div>
+      <a class="btn btn-accent" style="margin-top:10px; text-decoration:none; display:block; text-align:center;" href="${scanLink}" target="_blank" rel="noopener">📷 افتح صفحة الماسح الآن</a>
     </div>
 
     <div class="card">
@@ -1506,6 +1630,17 @@ async function renderMerchantDashboard(){
       <div id="waSendListWrap"></div>
     </div>
 
+    <div class="card">
+      <div class="eyebrow">الصفحة الرئيسية</div>
+      <h3>💬 شارك رأيك بمنصة ولاء</h3>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">رأيك يظهر بقسم "آراء عملائنا" بالصفحة الرئيسية العامة، باسم محلك. أنت بس تقدر تعدّل أو تحذف رأيك.</p>
+      <textarea id="myTestimonialText" placeholder="مثال: صار زبوني يرجعلي أكثر بعد ما بدأنا بولاء">${escapeHTML(myTestimonial ? myTestimonial.text : '')}</textarea>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-accent" style="flex:1;" onclick="submitMyTestimonial()">${myTestimonial ? 'حفظ التعديل' : 'نشر رأيي'}</button>
+        ${myTestimonial ? `<button class="btn btn-ghost" onclick="removeMyTestimonial()">حذف</button>` : ''}
+      </div>
+    </div>
+
     <div class="card" style="text-align:center;">
       <div class="eyebrow">ℹ️ من نحن</div>
       <h3>عن منصة ولاء</h3>
@@ -1523,7 +1658,8 @@ async function renderMerchantDashboard(){
     {key:'all', label:'كل الزبائن'},
     {key:'new', label:'زبائن جدد'},
     {key:'returning', label:'زبائن راجعين'},
-    {key:'birthday', label:'عيد ميلادهم اليوم'}
+    {key:'birthday', label:'عيد ميلادهم اليوم'},
+    {key:'inactive30', label:'غابوا 30 يوم+'}
   ];
   window._selectedSegment = 'all';
   const segChoice = document.getElementById('segChoice');
@@ -1624,6 +1760,51 @@ async function importMerchantBackup(event){
   event.target.value = '';
 }
 
+function smartSuggestionsHTML(customers, biz){
+  const segs = customerSegments(customers, biz.threshold);
+  const bdayList = segs.birthday;
+  const inactiveList = segs.inactive30;
+  if(bdayList.length === 0 && inactiveList.length === 0) return '';
+
+  let items = '';
+  if(bdayList.length > 0){
+    const names = bdayList.slice(0,2).map(c=>escapeHTML(c.name)).join('، ');
+    items += `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--border);">
+        <div style="font-size:13px;">🎂 <strong>${bdayList.length}</strong> عيد ميلادهم اليوم${bdayList.length<=2 ? ' — '+names : ''}</div>
+        <button class="btn btn-accent btn-sm" onclick="applySmartSuggestion('birthday')">جهّز رسالة</button>
+      </div>`;
+  }
+  if(inactiveList.length > 0){
+    items += `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0;">
+        <div style="font-size:13px;">👋 <strong>${inactiveList.length}</strong> زبون غابوا 30 يوم أو أكثر</div>
+        <button class="btn btn-accent btn-sm" onclick="applySmartSuggestion('inactive30')">جهّز رسالة</button>
+      </div>`;
+  }
+  return `
+    <div class="card" style="background:linear-gradient(135deg, var(--accent-light), var(--surface));">
+      <div class="eyebrow">💡 اقتراحات ذكية</div>
+      <h3>فرص ترجّع زبائنك</h3>
+      ${items}
+    </div>
+  `;
+}
+
+function applySmartSuggestion(segKey){
+  selectSegment(segKey);
+  const msgBox = document.getElementById('broadcastMsg');
+  if(!msgBox) return;
+  const messages = {
+    birthday: `🎂 عيد ميلاد سعيد! بمناسبة يومك، عندك خصم خاص اليوم بس — تعال زورنا واستمتع فيه 🎁`,
+    inactive30: `👋 وحشتنا! صار وقت طويل ما زرتنا. تعال خذ ختمك وكمل بطاقتك — بانتظارك 🤍`
+  };
+  msgBox.value = messages[segKey] || '';
+  msgBox.scrollIntoView({behavior:'smooth', block:'center'});
+  msgBox.focus();
+  toast('جهّزنا لك الرسالة — راجعها واضغط إرسال 📣');
+}
+
 function selectSegment(key){
   window._selectedSegment = key;
   document.querySelectorAll('.seg-pill').forEach(p=>{
@@ -1718,13 +1899,63 @@ async function addCustomer(){
   renderMerchantDashboard();
 }
 
+async function logVisit(bizId, cust, rewardEarned){
+  if(!_db) return;
+  try{
+    await _db.collection('businesses').doc(bizId).collection('stamps').add({
+      customerPhone: cust.phone, customerName: cust.name || cust.phone,
+      time: new Date().toISOString(), rewardEarned: !!rewardEarned
+    });
+  }catch(e){ console.error('logVisit failed', e); }
+}
+
+async function listRecentStamps(bizId, days){
+  if(!_db) return [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  try{
+    const snap = await _db.collection('businesses').doc(bizId).collection('stamps')
+      .where('time', '>=', cutoff.toISOString())
+      .get();
+    return snap.docs.map(d => d.data());
+  }catch(e){ console.error('listRecentStamps failed', e); return []; }
+}
+
 async function addStamp(phone){
   const cust = await getCustomer(currentBiz.id, phone);
   if(!cust) return;
+  let rewardEarned = false;
   if(cust.points < currentBiz.threshold) cust.points += 1;
-  else { cust.points = 0; toast(`🎉 ${cust.name} استحق المكافأة! تم تصفير البطاقة`); }
+  else { cust.points = 0; rewardEarned = true; cust.totalRewards = (cust.totalRewards||0) + 1; toast(`🎉 ${cust.name} استحق المكافأة! تم تصفير البطاقة`); }
+  cust.lastVisitAt = new Date().toISOString();
+  cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(currentBiz.id, phone, cust);
+  await logVisit(currentBiz.id, cust, rewardEarned);
   renderMerchantDashboard();
+}
+
+async function submitMyTestimonial(){
+  const text = document.getElementById('myTestimonialText').value.trim();
+  if(!text){ toast('اكتب رأيك أول'); return; }
+  if(text.length > 300){ toast('النص طويل، اختصره شوي (300 حرف كحد أقصى)'); return; }
+  const ok = await saveMyTestimonial(currentBiz.id, {
+    text, bizName: currentBiz.name, createdAt: new Date().toISOString()
+  });
+  if(ok){ toast('تم نشر رأيك 🎉'); renderMerchantDashboard(); }
+  else{ toast('تعذّر الحفظ، حاول مرة ثانية'); }
+}
+
+async function removeMyTestimonial(){
+  showConfirmModal(
+    'حذف رأيك',
+    'راح ينحذف رأيك من الصفحة الرئيسية. تقدر تنشر رأي جديد بأي وقت.',
+    'حذف',
+    async () => {
+      await deleteMyTestimonial(currentBiz.id);
+      toast('تم الحذف');
+      renderMerchantDashboard();
+    }
+  );
 }
 
 async function removeCustomer(phone){
@@ -1739,7 +1970,7 @@ async function sendBroadcast(){
   const {list:customers} = await loadAllCustomers(currentBiz.id);
   const segs = customerSegments(customers, currentBiz.threshold);
   const segKey = window._selectedSegment || 'all';
-  const segLabels = {all:'كل الزبائن', new:'زبائن جدد', returning:'زبائن راجعين', birthday:'عيد ميلادهم اليوم'};
+  const segLabels = {all:'كل الزبائن', new:'زبائن جدد', returning:'زبائن راجعين', birthday:'عيد ميلادهم اليوم', inactive30:'غابوا 30 يوم+'};
   const targetList = segs[segKey];
 
   const broadcasts = currentBiz.broadcasts || [];
@@ -1942,6 +2173,33 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
     const c = chipPalette[i % chipPalette.length];
     return `<span class="offer-chip" style="background:${c.bg}; color:${c.fg};">${escapeHTML(o)}</span>`;
   }).join('')}</div>` : '';
+
+  // شريط معلومات إضافية: آخر زيارة، كم باقي للمكافأة، ومكافآته السابقة
+  const remaining = Math.max(0, threshold - points);
+  let progressLine;
+  if(points === 0){
+    progressLine = `👋 ابدأ رحلتك! أول ختم بانتظارك`;
+  } else if(remaining === 0){
+    progressLine = `🎉 مكافأتك جاهزة! خذها بزيارتك الجاية`;
+  } else if(remaining === 1){
+    progressLine = `🎁 باقي لك ختم وحد بس للمكافأة!`;
+  } else {
+    progressLine = `🎁 باقي لك ${remaining} أختام للمكافأة`;
+  }
+  const lastVisitLine = custData.lastVisitAt
+    ? `آخر زيارة: ${new Date(custData.lastVisitAt).toLocaleDateString('ar')}`
+    : `أول زيارة لك — أهلاً فيك 🤍`;
+  const rewardsCount = custData.totalRewards || 0;
+  const rewardsLine = rewardsCount > 0 ? `🏆 حصلت على ${rewardsCount} مكافأة لهسه` : '';
+
+  const infoStripHTML = `
+    <div class="card-info-strip" style="margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; color:var(--ink); line-height:2;">
+      <div style="font-weight:700;">${progressLine}</div>
+      <div style="color:var(--muted);">${lastVisitLine}</div>
+      ${rewardsLine ? `<div style="color:var(--muted);">${rewardsLine}</div>` : ''}
+    </div>
+  `;
+
   return `
     <div class="loycard" style="background:linear-gradient(135deg, ${biz.primary}, ${shade(biz.primary,-18)});">
       <div class="lc-top">
@@ -1954,6 +2212,7 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
         <div class="lc-points">${points}/${threshold}</div>
       </div>
     </div>
+    ${infoStripHTML}
     ${offersHTML}
   `;
 }
@@ -2056,6 +2315,7 @@ async function renderStaffScanner(bizId){
       <button class="btn btn-primary" style="margin-top:14px;" onclick="staffAddStamp('${bizId}')">إضافة ختم</button>
       <div id="scanResult"></div>
     </div>
+    <button class="btn btn-ghost" style="margin-top:10px;" onclick="backToLanding()">⬅️ رجوع للصفحة الرئيسية</button>
     <button class="link-btn" style="margin:14px auto; display:block; color:var(--danger);" onclick="staffScannerLogout('${bizId}')">تسجيل خروج الموظف</button>
   `;
 }
@@ -2073,6 +2333,7 @@ function renderStaffScannerLogin(bizId, biz){
       <input type="password" id="staffPass" placeholder="••••••••">
       <button class="btn btn-primary" style="margin-top:16px;" onclick="staffScannerLogin('${bizId}')">دخول</button>
     </div>
+    <button class="btn btn-ghost" onclick="backToLanding()">⬅️ رجوع للصفحة الرئيسية</button>
   `;
 }
 
@@ -2199,9 +2460,13 @@ async function staffAddStamp(bizId){
     resultArea.innerHTML = `<div class="empty" style="margin-top:14px;"><span class="icon">🔍</span><p>ما فيه زبون بهذا الرقم.<br>خله ينضم أول من رابط QR.</p></div>`;
     return;
   }
+  let rewardEarned = false;
   if(cust.points < biz.threshold) cust.points += 1;
-  else { cust.points = 0; toast('🎉 استحق المكافأة! تم تصفير البطاقة'); }
+  else { cust.points = 0; rewardEarned = true; cust.totalRewards = (cust.totalRewards||0) + 1; toast('🎉 استحق المكافأة! تم تصفير البطاقة'); }
+  cust.lastVisitAt = new Date().toISOString();
+  cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(bizId, phone, cust);
+  await logVisit(bizId, cust, rewardEarned);
   resultArea.innerHTML = `
     <div style="margin-top:16px;">
       <p class="center-note" style="margin-bottom:0;">${escapeHTML(cust.name)}</p>
@@ -2414,10 +2679,11 @@ async function adminRemovePartner(i){
 async function renderAdminTestimonials(){
   const raw = await storageGet('testimonials-list');
   const items = raw ? JSON.parse(raw) : [];
+  const bizItems = await listBizTestimonials();
   document.getElementById('adminView').innerHTML = `
     <div class="card">
       <div class="eyebrow">الصفحة الرئيسية</div>
-      <h3>💬 آراء العملاء</h3>
+      <h3>💬 آراء العملاء (يدوية)</h3>
       <label>اسم صاحب الرأي</label>
       <input type="text" id="tName" placeholder="مثال: أبو علي، صاحب مطعم">
       <label>نص الرأي</label>
@@ -2425,13 +2691,26 @@ async function renderAdminTestimonials(){
       <button class="btn btn-accent" style="margin-top:14px;" onclick="adminAddTestimonial()">➕ إضافة</button>
     </div>
     <div class="card">
-      <h3>الآراء الحالية (${items.length})</h3>
+      <h3>الآراء اليدوية (${items.length})</h3>
       ${items.length===0 ? `<div class="empty"><span class="icon">💬</span><p>ما فيه آراء مضافة بعد</p></div>` : items.map((t,i)=>`
         <div style="padding:10px 0; border-bottom:1px solid var(--border);">
           <div style="font-size:13.5px; line-height:1.7;">"${escapeHTML(t.text)}"</div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
             <strong style="font-size:12.5px;">— ${escapeHTML(t.name)}</strong>
             <button class="icon-btn" onclick="adminRemoveTestimonial(${i})">🗑️</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card">
+      <h3>آراء أصحاب الأعمال (${bizItems.length})</h3>
+      <p style="font-size:12px; color:var(--muted);">هذي آراء نشرها أصحاب الأعمال بأنفسهم من لوحاتهم — تقدر تحذف أي رأي غير مناسب.</p>
+      ${bizItems.length===0 ? `<div class="empty"><span class="icon">💬</span><p>ما فيه آراء من أصحاب الأعمال بعد</p></div>` : bizItems.map(t=>`
+        <div style="padding:10px 0; border-bottom:1px solid var(--border);">
+          <div style="font-size:13.5px; line-height:1.7;">"${escapeHTML(t.text)}"</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <strong style="font-size:12.5px;">— ${escapeHTML(t.bizName)}</strong>
+            <button class="icon-btn" onclick="adminRemoveBizTestimonial('${t.bizId}')">🗑️</button>
           </div>
         </div>
       `).join('')}
@@ -2457,6 +2736,12 @@ async function adminRemoveTestimonial(i){
   let items = raw ? JSON.parse(raw) : [];
   items.splice(i,1);
   await storageSet('testimonials-list', JSON.stringify(items));
+  renderAdminTestimonials();
+}
+
+async function adminRemoveBizTestimonial(bizId){
+  await deleteMyTestimonial(bizId);
+  toast('تم حذف الرأي');
   renderAdminTestimonials();
 }
 
