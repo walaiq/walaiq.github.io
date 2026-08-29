@@ -2361,21 +2361,39 @@ function staffScannerLogout(bizId){
 }
 
 async function backFromStaffScanner(){
-  const savedBizId = loadBizSessionId();
-  if(savedBizId){
-    const biz = await getBusiness(savedBizId);
-    if(biz){
-      currentBiz = await ensureTrialDates(biz);
-      document.getElementById('logoutBtn').classList.remove('hidden');
-      document.getElementById('landingView').classList.add('hidden');
-      document.getElementById('mainTabs').classList.remove('hidden');
-      document.getElementById('merchantView').classList.remove('hidden');
-      document.getElementById('customerView').classList.add('hidden');
-      document.getElementById('adminView').classList.add('hidden');
-      renderMerchantDashboard();
-      return;
+  const showDashboard = async (biz, bizId) => {
+    currentBiz = await ensureTrialDates(biz);
+    saveBizSession(bizId);
+    document.getElementById('logoutBtn').classList.remove('hidden');
+    document.getElementById('landingView').classList.add('hidden');
+    document.getElementById('mainTabs').classList.remove('hidden');
+    document.getElementById('merchantView').classList.remove('hidden');
+    document.getElementById('customerView').classList.add('hidden');
+    document.getElementById('adminView').classList.add('hidden');
+    renderMerchantDashboard();
+  };
+
+  // الطريقة الأولى (الأوثق): نستخدم إيميل الحساب المسجّل دخوله فعلياً بـ Firebase —
+  // هذا موجود أكيد لأن صفحة الماسح أصلاً ما تفتح إلا بعد تسجيل دخول صحيح
+  try{
+    if(_auth && _auth.currentUser && _auth.currentUser.email){
+      const bizId = await getBizIdByEmail(_auth.currentUser.email.toLowerCase());
+      if(bizId){
+        const biz = await getBusiness(bizId);
+        if(biz){ await showDashboard(biz, bizId); return; }
+      }
     }
-  }
+  }catch(e){ console.error('backFromStaffScanner (auth path) failed', e); }
+
+  // احتياط: نجرب الجلسة المحفوظة محلياً بهالجهاز لو الطريقة الأولى ما زبطت
+  try{
+    const savedBizId = loadBizSessionId();
+    if(savedBizId){
+      const biz = await getBusiness(savedBizId);
+      if(biz){ await showDashboard(biz, savedBizId); return; }
+    }
+  }catch(e){ console.error('backFromStaffScanner (session path) failed', e); }
+
   backToLanding();
 }
 
@@ -2977,7 +2995,22 @@ async function toggleSubscription(bizId){
   renderAdminPanel();
 }
 
-init();
+// نستنى فايربيس يخلص استرجاع جلسة الدخول المحفوظة (Firebase Auth) قبل ما نشغّل التطبيق —
+// لأنه بعد كل رفرش، _auth.currentUser يضل فاضي (null) لجزء من الثانية لين فايربيس يتأكد من الحالة الحقيقية.
+// لو شغّلنا init() قبل هذا، أي شاشة تتحقق من تسجيل الدخول (زي صفحة الماسح) بتحسبك "مو داخل" غلط.
+let _authInitDone = false;
+function startApp(){
+  if(_authInitDone) return;
+  _authInitDone = true;
+  init();
+}
+if(_auth){
+  _auth.onAuthStateChanged(function(){ startApp(); });
+  // احتياط: لو لأي سبب onAuthStateChanged تأخر كثير، ما نخلي المستخدم يعلق بلا شي
+  setTimeout(startApp, 2000);
+} else {
+  startApp();
+}
 </script>
 </body>
 </html>
