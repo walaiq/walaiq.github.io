@@ -2315,7 +2315,7 @@ async function renderStaffScanner(bizId){
       <button class="btn btn-primary" style="margin-top:14px;" onclick="staffAddStamp('${bizId}')">إضافة ختم</button>
       <div id="scanResult"></div>
     </div>
-    <button class="btn btn-ghost" style="margin-top:10px;" onclick="backToLanding()">⬅️ رجوع للصفحة الرئيسية</button>
+    <button class="btn btn-ghost" style="margin-top:10px;" onclick="backFromStaffScanner()">⬅️ رجوع</button>
     <button class="link-btn" style="margin:14px auto; display:block; color:var(--danger);" onclick="staffScannerLogout('${bizId}')">تسجيل خروج الموظف</button>
   `;
 }
@@ -2333,7 +2333,7 @@ function renderStaffScannerLogin(bizId, biz){
       <input type="password" id="staffPass" placeholder="••••••••">
       <button class="btn btn-primary" style="margin-top:16px;" onclick="staffScannerLogin('${bizId}')">دخول</button>
     </div>
-    <button class="btn btn-ghost" onclick="backToLanding()">⬅️ رجوع للصفحة الرئيسية</button>
+    <button class="btn btn-ghost" onclick="backFromStaffScanner()">⬅️ رجوع</button>
   `;
 }
 
@@ -2358,6 +2358,25 @@ async function staffScannerLogin(bizId){
 function staffScannerLogout(bizId){
   try{ if(_auth) _auth.signOut(); }catch(e){}
   renderStaffScanner(bizId);
+}
+
+async function backFromStaffScanner(){
+  const savedBizId = loadBizSessionId();
+  if(savedBizId){
+    const biz = await getBusiness(savedBizId);
+    if(biz){
+      currentBiz = await ensureTrialDates(biz);
+      document.getElementById('logoutBtn').classList.remove('hidden');
+      document.getElementById('landingView').classList.add('hidden');
+      document.getElementById('mainTabs').classList.remove('hidden');
+      document.getElementById('merchantView').classList.remove('hidden');
+      document.getElementById('customerView').classList.add('hidden');
+      document.getElementById('adminView').classList.add('hidden');
+      renderMerchantDashboard();
+      return;
+    }
+  }
+  backToLanding();
 }
 
 let _qrStream = null;
