@@ -588,12 +588,12 @@ function showForgotPassword(){
     <div class="modal-box">
       <div class="modal-icon" style="background:var(--accent-light); color:var(--primary-dark);">🔑</div>
       <h3>استعادة كلمة المرور</h3>
-      <p>اكتب بريدك المسجّل وراح نرسلك رمز تقدر تغيّر بيه كلمة مرورك مباشرة.</p>
+      <p>اكتب بريدك المسجّل وراح نرسلك رابط آمن من Firebase تقدر بيه تعيّن كلمة مرور جديدة.</p>
       <label style="text-align:right; display:block;">البريد الإلكتروني</label>
       <input type="text" id="fpEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
       <div class="modal-actions">
         <button class="btn btn-ghost" id="fpCloseBtn">إغلاق</button>
-        <button class="btn btn-primary" id="fpSendBtn" onclick="sendPasswordResetCode()">إرسال الرمز</button>
+        <button class="btn btn-primary" id="fpSendBtn" onclick="sendFirebaseResetLink()">إرسال الرابط</button>
       </div>
     </div>
   `;
@@ -603,76 +603,83 @@ function showForgotPassword(){
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
 }
 
-async function sendPasswordResetCode(){
+async function sendFirebaseResetLink(){
   const email = (document.getElementById('fpEmail').value || '').trim().toLowerCase();
   if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
 
-  const bizId = await storageGet('email-index:'+email);
-  if(!bizId){ toast('ما فيه حساب مسجّل بهذا البريد'); return; }
-  const raw = await storageGet('business:'+bizId);
-  if(!raw){ toast('تعذّر إيجاد الحساب، تواصل معنا'); return; }
-  const biz = JSON.parse(raw);
-
-  const code = generateSixDigitCode();
-  await storageSet('password-reset:'+bizId, JSON.stringify({code, email, createdAt:new Date().toISOString()}));
-
-  if(window.emailjs && window._EMAILJS_READY){
-    try{
-      await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_TEMPLATE_ID, {
-        to_email: email,
-        code: code,
-        business_name: biz.name
-      });
-    }catch(e){
-      console.error('emailjs send failed', e);
-      toast('تعذّر إرسال البريد، جرب مرة ثانية');
-      return;
+  try{
+    await _auth.sendPasswordResetEmail(email, {
+      url: window.location.origin + window.location.pathname,
+      handleCodeInApp: true
+    });
+    const overlay = document.querySelector('.modal-overlay');
+    if(overlay){
+      overlay.querySelector('.modal-box').innerHTML = `
+        <div class="modal-icon" style="background:var(--accent-light); color:var(--primary-dark);">📩</div>
+        <h3>تفقّد بريدك</h3>
+        <p>أرسلنا رابط آمن من Firebase إلى <strong dir="ltr">${escapeHTML(email)}</strong>. افتحه واختر كلمة مرور جديدة، وراح ترجعك هالصفحة تلقائياً بعدها.</p>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="fpCloseBtn3">تمام</button>
+        </div>
+      `;
+      overlay.querySelector('#fpCloseBtn3').onclick = () => document.body.removeChild(overlay);
     }
+  }catch(e){
+    console.error('sendPasswordResetEmail failed', e);
+    if(e.code === 'auth/user-not-found'){ toast('ما فيه حساب مسجّل بهذا البريد'); }
+    else { toast('تعذّر إرسال رابط الاستعادة، حاول مرة ثانية'); }
   }
-
-  renderPasswordResetStep(bizId, email);
 }
 
-function renderPasswordResetStep(bizId, email){
-  const overlay = document.querySelector('.modal-overlay');
-  if(!overlay) return;
-  overlay.querySelector('.modal-box').innerHTML = `
-    <div class="modal-icon" style="background:var(--accent-light); color:var(--primary-dark);">📩</div>
-    <h3>أدخل الرمز وكلمة المرور الجديدة</h3>
-    <p>أرسلنا رمز مكوّن من 6 أرقام إلى <strong dir="ltr">${escapeHTML(email)}</strong>.</p>
-    <label style="text-align:right; display:block;">الرمز</label>
-    <input type="text" id="fpCode" placeholder="000000" dir="ltr" inputmode="numeric" maxlength="6" style="text-align:center; letter-spacing:4px; font-weight:800;">
-    <label style="text-align:right; display:block; margin-top:10px;">كلمة المرور الجديدة</label>
-    <input type="password" id="fpNewPass" placeholder="8 خانات على الأقل">
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="fpCloseBtn2">إغلاق</button>
-      <button class="btn btn-primary" onclick="confirmPasswordReset('${bizId}')">تغيير كلمة المرور</button>
+/* -------- التعامل مع روابط Firebase الآمنة (استعادة كلمة المرور) القادمة من الإيميل -------- */
+async function handleFirebaseActionLink(){
+  if(!_auth) return false;
+  const params = new URLSearchParams(window.location.search);
+  const oobCode = params.get('oobCode');
+  const mode = params.get('mode');
+  if(!oobCode || mode !== 'resetPassword') return false;
+
+  window.history.replaceState({}, document.title, window.location.pathname); // ننظف الرابط فوراً
+  try{
+    const email = await _auth.verifyPasswordResetCode(oobCode);
+    renderResetPasswordForm(oobCode, email);
+  }catch(e){
+    toast('رابط استعادة كلمة المرور منتهي أو مستخدم من قبل، اطلب رابط جديد');
+    showLandingPage();
+  }
+  return true;
+}
+
+function renderResetPasswordForm(oobCode, email){
+  document.getElementById('landingView').classList.add('hidden');
+  document.getElementById('mainTabs').classList.remove('hidden');
+  document.getElementById('merchantView').classList.remove('hidden');
+  document.getElementById('customerView').classList.add('hidden');
+  document.getElementById('adminView').classList.add('hidden');
+  document.getElementById('merchantView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">استعادة كلمة المرور</div>
+      <h3>عيّن كلمة مرور جديدة</h3>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">لحساب: <strong dir="ltr">${escapeHTML(email)}</strong></p>
+      <label>كلمة المرور الجديدة</label>
+      <input type="password" id="newPassInput" placeholder="8 خانات على الأقل">
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="submitNewPassword('${oobCode}')">تعيين كلمة المرور</button>
     </div>
   `;
-  overlay.querySelector('#fpCloseBtn2').onclick = () => document.body.removeChild(overlay);
 }
 
-async function confirmPasswordReset(bizId){
-  const code = (document.getElementById('fpCode').value || '').trim();
-  const newPass = document.getElementById('fpNewPass').value;
-  if(!code){ toast('اكتب الرمز المرسل لبريدك'); return; }
+async function submitNewPassword(oobCode){
+  const newPass = document.getElementById('newPassInput').value;
   if(!newPass || newPass.length < 8){ toast('كلمة المرور لازم تكون 8 خانات على الأقل'); return; }
-
-  const raw = await storageGet('password-reset:'+bizId);
-  if(!raw){ toast('انتهت صلاحية الرمز، اطلب رمز جديد'); return; }
-  const data = JSON.parse(raw);
-  if(code !== data.code){ toast('الرمز غير صحيح'); return; }
-
-  const bizRaw = await storageGet('business:'+bizId);
-  if(!bizRaw){ toast('تعذّر إيجاد الحساب'); return; }
-  const biz = JSON.parse(bizRaw);
-  biz.password = newPass;
-  await storageSet('business:'+bizId, JSON.stringify(biz));
-  await storageDelete('password-reset:'+bizId);
-
-  toast('تم تغيير كلمة المرور ✅ سجّل دخولك الآن');
-  const overlay = document.querySelector('.modal-overlay');
-  if(overlay) document.body.removeChild(overlay);
+  try{
+    await _auth.confirmPasswordReset(oobCode, newPass);
+    toast('تم تغيير كلمة المرور ✅ سجّل دخولك الآن');
+    renderMerchantLogin();
+  }catch(e){
+    console.error('confirmPasswordReset failed', e);
+    toast('تعذّر تغيير كلمة المرور، الرابط ممكن يكون منتهي — اطلب رابط جديد');
+  }
 }
 
 function showConfirmModal(title, message, confirmLabel, onConfirm){
@@ -771,7 +778,8 @@ function switchTab(which){
 /* ---------------- Init & routing ---------------- */
 async function init(){
   document.getElementById('logoutBtn').classList.add('hidden');
-  await handleEmailLinkReturn(); // لازم تصير أول شي قبل قراءة بارامترات الرابط، لأن رابط فايربيس يستخدم نفس اسم mode
+  const wasFirebaseLink = await handleFirebaseActionLink(); // لازم تصير أول شي قبل قراءة بارامترات الرابط، لأن رابط فايربيس يستخدم نفس اسم mode
+  if(wasFirebaseLink) return;
   const params = new URLSearchParams(window.location.search);
   const bizId = params.get('biz');
   const mode = params.get('mode'); // 'join' or 'scan'
@@ -958,67 +966,8 @@ function backToLanding(){
 }
 
 /* ================= MERCHANT: entry (unified phone-based flow) ================= */
-function isEmailVerified(){
-  try{ return !!localStorage.getItem('wala_email_verified'); }catch(e){ return false; }
-}
-function markEmailVerified(email){
-  try{ localStorage.setItem('wala_email_verified', email); }catch(e){}
-}
 function isValidEmail(email){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-async function handleEmailLinkReturn(){
-  if(!_auth || !_auth.isSignInWithEmailLink(window.location.href)) return;
-  let email = null;
-  try{ email = localStorage.getItem('wala_email_for_signin'); }catch(e){}
-  if(!email){ email = prompt('أدخل نفس البريد الإلكتروني اللي استخدمته عشان نكمّل التفعيل:'); }
-  if(!email) return;
-  try{
-    await _auth.signInWithEmailLink(email, window.location.href);
-    try{ localStorage.removeItem('wala_email_for_signin'); }catch(e){}
-    markEmailVerified(email);
-    // ننظف بارامترات فايربيس من الرابط عشان ما تتعارض مع روابط الموقع (join/scan/admin)
-    window.history.replaceState({}, document.title, window.location.pathname);
-    toast('تم تفعيل بريدك الإلكتروني ✅');
-  }catch(e){
-    console.error('email link sign-in failed', e);
-    toast('تعذّر تفعيل الرابط، جرب تسجل من جديد وترسل رابط تفعيل جديد');
-  }
-}
-
-function renderEmailGate(){
-  document.getElementById('merchantView').innerHTML = `
-    <div class="card">
-      <div class="eyebrow">صاحب العمل</div>
-      <h3>فعّل بريدك الإلكتروني أولاً</h3>
-      <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">عشان نتأكد إنك صاحب حساب حقيقي، لازم تفعّل بريدك الإلكتروني قبل التسجيل. راح نرسلك رابط تفعيل، تفتحه من نفس الجوال أو المتصفح.</p>
-      <label>البريد الإلكتروني</label>
-      <input type="text" id="gateEmail" placeholder="example@gmail.com" dir="ltr" inputmode="email">
-      <button class="btn btn-primary" style="margin-top:16px;" onclick="sendVerificationEmail()">📩 أرسل رابط التفعيل</button>
-      <div id="gateEmailNote" class="note hidden" style="margin-top:12px;"></div>
-    </div>
-  `;
-}
-
-async function sendVerificationEmail(){
-  const email = (document.getElementById('gateEmail').value || '').trim();
-  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
-  if(!_auth){ toast('تعذّر الاتصال بخدمة التفعيل، جرب لاحقاً'); return; }
-  const actionCodeSettings = {
-    url: window.location.origin + window.location.pathname,
-    handleCodeInApp: true
-  };
-  try{
-    await _auth.sendSignInLinkToEmail(email, actionCodeSettings);
-    try{ localStorage.setItem('wala_email_for_signin', email); }catch(e){}
-    const note = document.getElementById('gateEmailNote');
-    note.classList.remove('hidden');
-    note.textContent = '✅ أرسلنا رابط تفعيل إلى '+email+'. افتح بريدك واضغط الرابط، وراح ترجعك هالصفحة تلقائياً وتكمل تسجيلك.';
-  }catch(e){
-    console.error('sendSignInLinkToEmail failed', e);
-    toast('تعذّر إرسال رابط التفعيل، تأكد من صحة البريد وحاول مرة ثانية');
-  }
 }
 
 function catLabel(catId){
@@ -1086,16 +1035,24 @@ async function merchantLogin(){
   const password = document.getElementById('loginPassword').value;
   if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
   if(!password){ toast('اكتب كلمة المرور'); return; }
+  if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
 
-  let phoneId = await storageGet('email-index:'+email);
-  if(!phoneId){
-    toast('ما فيه حساب بهذا البريد');
+  try{
+    await _auth.signInWithEmailAndPassword(email, password);
+  }catch(e){
+    console.error('signInWithEmailAndPassword failed', e);
+    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){ toast('كلمة المرور غير صحيحة'); }
+    else if(e.code === 'auth/user-not-found'){ toast('ما فيه حساب بهذا البريد'); }
+    else if(e.code === 'auth/too-many-requests'){ toast('محاولات كثيرة، جرب بعد شوي'); }
+    else { toast('تعذّر تسجيل الدخول، تأكد من اتصال الإنترنت'); }
     return;
   }
+
+  const phoneId = await storageGet('email-index:'+email);
+  if(!phoneId){ toast('تعذّر إيجاد بيانات الحساب، تواصل معنا'); return; }
   const raw = await storageGet('business:'+phoneId);
   if(!raw){ toast('تعذّر إيجاد الحساب، تواصل معنا'); return; }
   const biz = JSON.parse(raw);
-  if(biz.password !== password){ toast('كلمة المرور غير صحيحة'); return; }
 
   currentBiz = await ensureTrialDates(biz);
   document.getElementById('logoutBtn').classList.remove('hidden');
@@ -1243,11 +1200,23 @@ async function verifyEmailCode(){
   const existingPhone = await storageGet('business:'+p.phone);
   if(existingPhone){ toast('هذا الرقم اتسجل من جهاز ثاني بالفتره اللي انتظرت فيها، جرب تسجيل الدخول'); clearPendingRegistration(); renderMerchantLogin(); return; }
 
+  if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
+  // ننشئ حساب Firebase Auth حقيقي — كلمة المرور تنحفظ مشفّرة عند Firebase نفسه، ما تمر أبداً على قاعدة بياناتنا
+  try{
+    await _auth.createUserWithEmailAndPassword(p.email, p.password);
+  }catch(e){
+    console.error('createUserWithEmailAndPassword failed', e);
+    if(e.code === 'auth/email-already-in-use'){ toast('هذا البريد مسجّل مسبقاً — سجّل دخولك بدل هذا'); }
+    else if(e.code === 'auth/weak-password'){ toast('كلمة المرور ضعيفة، اختر كلمة أقوى'); }
+    else { toast('تعذّر إنشاء الحساب، تأكد من اتصال الإنترنت وحاول مرة ثانية'); }
+    return;
+  }
+
   const until = new Date();
   until.setDate(until.getDate() + 30); // شهر مجاني بعد التحقق
 
   const biz = {
-    id:p.phone, phone:p.phone, name:p.name, ownerName:p.ownerName, city:p.city, email:p.email, password:p.password,
+    id:p.phone, phone:p.phone, name:p.name, ownerName:p.ownerName, city:p.city, email:p.email,
     category:'other', primary:'#1F4B3F', accent:'#B98B3E', threshold:6,
     rewardText:'مكافأة بعد 6 زيارات', offers:[],
     createdAt:new Date().toISOString(),
@@ -2431,8 +2400,10 @@ function renderAdminAddBusiness(){
       <input type="text" id="admNewName" placeholder="مثال: مقهى الزاوية">
       <label>معرّف الحساب (يوزر تسليمه للتاجر)</label>
       <input type="text" id="admNewId" placeholder="مثال: alzawya-cafe" dir="ltr">
+      <label>البريد الإلكتروني (يسجل دخوله فيه)</label>
+      <input type="text" id="admNewEmail" placeholder="owner@example.com" dir="ltr" inputmode="email">
       <label>كلمة المرور (سلّمها للتاجر)</label>
-      <input type="text" id="admNewPassword" placeholder="اكتب كلمة مرور واضحة">
+      <input type="text" id="admNewPassword" placeholder="8 خانات على الأقل">
       <label>عدد الزيارات للمكافأة</label>
       <input type="text" id="admNewThreshold" placeholder="مثال: 6" inputmode="numeric">
       <label>نص المكافأة</label>
@@ -2446,11 +2417,14 @@ function renderAdminAddBusiness(){
 async function adminCreateBusiness(){
   const name = document.getElementById('admNewName').value.trim();
   const customIdRaw = document.getElementById('admNewId').value.trim();
+  const email = document.getElementById('admNewEmail').value.trim().toLowerCase();
   const password = document.getElementById('admNewPassword').value;
   const threshold = parseInt(document.getElementById('admNewThreshold').value) || 6;
   const rewardText = document.getElementById('admNewReward').value.trim() || `مكافأة بعد ${threshold} زيارات`;
 
-  if(!name || !customIdRaw || !password){ toast('اكتب اسم العمل والمعرّف وكلمة المرور'); return; }
+  if(!name || !customIdRaw || !email || !password){ toast('اكتب اسم العمل والمعرّف والبريد وكلمة المرور'); return; }
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(password.length < 8){ toast('كلمة المرور لازم تكون 8 خانات على الأقل (متطلب Firebase)'); return; }
 
   const cleaned = customIdRaw.toLowerCase().replace(/\s+/g,'-');
   if(!/^[a-z0-9-]{3,40}$/.test(cleaned)){
@@ -2460,9 +2434,25 @@ async function adminCreateBusiness(){
   const idxRaw = await storageGet('businesses-index');
   let index = idxRaw ? JSON.parse(idxRaw) : [];
   if(index.includes(cleaned)){ toast('هذا المعرّف مستخدم من قبل، جرب واحد ثاني'); return; }
+  const existingEmail = await storageGet('email-index:'+email);
+  if(existingEmail){ toast('هذا البريد مستخدم مسبقاً لحساب آخر'); return; }
+
+  if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
+  // ننشئ حساب Firebase Auth حقيقي — كلمة المرور تنحفظ مشفّرة عند Firebase، ما تمر على قاعدة بياناتنا
+  try{
+    await _auth.createUserWithEmailAndPassword(email, password);
+  }catch(e){
+    console.error('createUserWithEmailAndPassword failed', e);
+    if(e.code === 'auth/email-already-in-use'){ toast('هذا البريد مسجّل مسبقاً بحساب Firebase آخر'); }
+    else if(e.code === 'auth/weak-password'){ toast('كلمة المرور ضعيفة، اختر كلمة أقوى'); }
+    else { toast('تعذّر إنشاء الحساب، تأكد من اتصال الإنترنت'); }
+    return;
+  }
+  // إنشاء حساب من الإدارة يسجّل دخول المدير بحساب التاجر تلقائياً بمتصفح الإدارة نفسه (تأثير جانبي من Firebase Auth) — نرجّع جلسة الإدارة فوراً
+  try{ await _auth.signOut(); }catch(e){}
 
   const biz = {
-    id:cleaned, name, password, primary:'#1F4B3F', accent:'#B98B3E', threshold, rewardText, offers:[],
+    id:cleaned, name, email, primary:'#1F4B3F', accent:'#B98B3E', threshold, rewardText, offers:[],
     createdAt:new Date().toISOString(),
     subscriptionStatus:'active', subscriptionUntil:null
   };
@@ -2470,13 +2460,14 @@ async function adminCreateBusiness(){
   index.push(cleaned);
   await storageSet('businesses-index', JSON.stringify(index));
   await storageSet('customers-index:'+cleaned, JSON.stringify([]));
+  await storageSet('email-index:'+email, cleaned);
 
   document.getElementById('adminView').innerHTML = `
     <div class="card" style="text-align:center;">
       <div style="font-size:34px;">✅</div>
       <h3 style="margin:10px 0 4px;">تم إنشاء الحساب</h3>
-      <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">سلّم هالبيانات لصاحب العمل ليسجل دخوله:</p>
-      <div class="link-box"><span style="flex:1; font-size:12px;">المعرّف</span><input type="text" readonly value="${cleaned}" style="text-align:left; font-weight:800;"></div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">سلّم هالبيانات لصاحب العمل ليسجل دخوله (البريد وكلمة المرور اللي كتبتها — ما راح تظهر لك مرة ثانية):</p>
+      <div class="link-box"><span style="flex:1; font-size:12px;">البريد</span><input type="text" readonly value="${escapeHTML(email)}" style="text-align:left; font-weight:800;"></div>
       <div class="link-box"><span style="flex:1; font-size:12px;">كلمة المرور</span><input type="text" readonly value="${escapeHTML(password)}" style="text-align:left; font-weight:800;"></div>
       <button class="btn btn-primary" style="margin-top:18px;" onclick="renderAdminPanel()">رجوع لقائمة الحسابات</button>
     </div>
@@ -2520,8 +2511,7 @@ async function adminEditBusiness(bizId){
       <h3>${escapeHTML(b.name)}</h3>
       <label>اسم العمل</label>
       <input type="text" id="admEdName" value="${escapeHTML(b.name)}">
-      <label>كلمة مرور الحساب (لمساعدة صاحب العمل لو نسيها)</label>
-      <input type="text" id="admEdPassword" value="${escapeHTML(b.password)}">
+      <div class="note">كلمة مرور صاحب العمل ما تظهر هنا ولا حتى عندنا — Firebase يديرها بشكل مشفّر بالكامل. لو نسيها، وجّهه لزر "نسيت كلمة المرور" بشاشة الدخول.</div>
       <label>عدد الزيارات للمكافأة</label>
       <input type="text" id="admEdThreshold" value="${b.threshold}" inputmode="numeric">
       <label>نص المكافأة</label>
@@ -2572,8 +2562,6 @@ async function adminSaveEditBusiness(bizId){
   if(!raw) return;
   const b = JSON.parse(raw);
   b.name = document.getElementById('admEdName').value.trim() || b.name;
-  const newPass = document.getElementById('admEdPassword').value.trim();
-  if(newPass) b.password = newPass;
   b.threshold = parseInt(document.getElementById('admEdThreshold').value) || b.threshold;
   b.rewardText = document.getElementById('admEdReward').value.trim() || b.rewardText;
   b.subscriptionStatus = document.getElementById('admEdStatus').value;
