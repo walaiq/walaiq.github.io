@@ -1274,8 +1274,10 @@ async function verifyEmailCode(){
 
   if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
   // ننشئ حساب Firebase Auth حقيقي — كلمة المرور تنحفظ مشفّرة عند Firebase نفسه، ما تمر أبداً على قاعدة بياناتنا
+  let ownerUid;
   try{
-    await _auth.createUserWithEmailAndPassword(p.email, p.password);
+    const cred = await _auth.createUserWithEmailAndPassword(p.email, p.password);
+    ownerUid = cred.user.uid; // المعرّف الثابت اللي نربط فيه الحساب بصاحبه (بدل الإيميل المتغيّر)
   }catch(e){
     console.error('createUserWithEmailAndPassword failed', e);
     if(e.code === 'auth/email-already-in-use'){ toast('هذا البريد مسجّل مسبقاً — سجّل دخولك بدل هذا'); }
@@ -1288,7 +1290,7 @@ async function verifyEmailCode(){
   until.setDate(until.getDate() + 30); // شهر مجاني بعد التحقق
 
   const biz = {
-    id:p.phone, phone:p.phone, name:p.name, ownerName:p.ownerName, city:p.city, email:p.email,
+    id:p.phone, phone:p.phone, name:p.name, ownerName:p.ownerName, city:p.city, email:p.email, ownerUid,
     category:'other', primary:'#1F4B3F', accent:'#B98B3E', threshold:6,
     rewardText:'مكافأة بعد 6 زيارات', offers:[], broadcasts:[],
     createdAt:new Date().toISOString(),
@@ -2505,8 +2507,10 @@ async function adminCreateBusiness(){
 
   if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
   // ننشئ حساب Firebase Auth حقيقي — كلمة المرور تنحفظ مشفّرة عند Firebase، ما تمر على قاعدة بياناتنا
+  let ownerUid;
   try{
-    await _auth.createUserWithEmailAndPassword(email, password);
+    const cred = await _auth.createUserWithEmailAndPassword(email, password);
+    ownerUid = cred.user.uid;
   }catch(e){
     console.error('createUserWithEmailAndPassword failed', e);
     if(e.code === 'auth/email-already-in-use'){ toast('هذا البريد مسجّل مسبقاً بحساب Firebase آخر'); }
@@ -2516,7 +2520,7 @@ async function adminCreateBusiness(){
   }
 
   const biz = {
-    id:cleaned, name, email, primary:'#1F4B3F', accent:'#B98B3E', threshold, rewardText, offers:[],
+    id:cleaned, name, email, ownerUid, primary:'#1F4B3F', accent:'#B98B3E', threshold, rewardText, offers:[],
     createdAt:new Date().toISOString(),
     // كل حساب لازم يتسجل كـ "تجريبي" أول ما يتنشئ (متطلب Firestore Rules) —
     // ترجعلك لوحة الإدارة بعد تسجيل الدخول من جديد وتقدر تفعّله فوراً من زر "تفعيل/تمديد الاشتراك"
