@@ -2518,7 +2518,9 @@ async function adminCreateBusiness(){
   const biz = {
     id:cleaned, name, email, primary:'#1F4B3F', accent:'#B98B3E', threshold, rewardText, offers:[],
     createdAt:new Date().toISOString(),
-    subscriptionStatus:'active', subscriptionUntil:null
+    // كل حساب لازم يتسجل كـ "تجريبي" أول ما يتنشئ (متطلب Firestore Rules) —
+    // ترجعلك لوحة الإدارة بعد تسجيل الدخول من جديد وتقدر تفعّله فوراً من زر "تفعيل/تمديد الاشتراك"
+    subscriptionStatus:'trial', subscriptionUntil:computeTrialUntil(new Date().toISOString())
   };
   await saveBusiness(cleaned, biz);
   await setEmailIndex(email, cleaned);
@@ -2536,7 +2538,7 @@ async function adminCreateBusiness(){
       <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">سلّم هالبيانات لصاحب العمل ليسجل دخوله (البريد وكلمة المرور اللي كتبتها — ما راح تظهر لك مرة ثانية):</p>
       <div class="link-box"><span style="flex:1; font-size:12px;">البريد</span><input type="text" readonly value="${escapeHTML(email)}" style="text-align:left; font-weight:800;"></div>
       <div class="link-box"><span style="flex:1; font-size:12px;">كلمة المرور</span><input type="text" readonly value="${escapeHTML(password)}" style="text-align:left; font-weight:800;"></div>
-      <div class="note" style="margin-top:12px;">⚠️ صار لازم تسجل دخولك للإدارة من جديد (هذا طبيعي، جزء من حماية النظام).</div>
+      <div class="note" style="margin-top:12px;">⚠️ الحساب انسوى كـ "تجريبي" مبدئياً (متطلب أمني). بعد ما تسجل دخولك من جديد، افتح الحساب من قائمة الحسابات واضغط "تفعيل/تمديد الاشتراك" لو تبيه فعّال فوراً.</div>
       <button class="btn btn-primary" style="margin-top:18px;" onclick="renderAdminLogin()">تسجيل الدخول من جديد</button>
     </div>
   `;
