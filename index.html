@@ -736,7 +736,6 @@ function fallbackCopy(text, inputEl){
 function baseUrl(){
   return window.location.origin + window.location.pathname;
 }
-const ADMIN_PASSWORD_DEFAULT = 'wala-admin-2026';
 
 /* ---------------- Session persistence (localStorage) ---------------- */
 function saveBizSession(bizId){
@@ -2129,27 +2128,46 @@ async function staffAddStamp(bizId){
 }
 
 /* ================= ADMIN ================= */
+const ADMIN_EMAIL = 'hadihussien9@gmail.com'; // البريد الوحيد المصرّح له بدخول لوحة الإدارة
 let adminAuthed = false;
-async function getAdminPassword(){
-  const raw = await storageGet('admin-password');
-  return raw || ADMIN_PASSWORD_DEFAULT;
-}
 function renderAdminLogin(){
   if(adminAuthed){ renderAdminPanel(); return; }
   document.getElementById('adminView').innerHTML = `
     <div class="card">
       <div class="eyebrow">لوحة الإدارة</div>
       <h3>دخول المشرف</h3>
-      <label>كلمة مرور الإدارة</label>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">هذي الصفحة مخصصة لحساب الإدارة فقط.</p>
+      <label>البريد الإلكتروني</label>
+      <input type="text" id="adminEmail" placeholder="you@example.com" dir="ltr" inputmode="email">
+      <label>كلمة المرور</label>
       <input type="password" id="adminPass" placeholder="••••••••">
       <button class="btn btn-primary" style="margin-top:16px;" onclick="adminLogin()">دخول</button>
+      <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;"><button class="link-btn" onclick="showForgotPassword()">نسيت كلمة المرور؟</button></div>
     </div>
   `;
 }
 async function adminLogin(){
+  const email = (document.getElementById('adminEmail').value || '').trim().toLowerCase();
   const pass = document.getElementById('adminPass').value;
-  const correctPass = await getAdminPassword();
-  if(pass !== correctPass){ toast('كلمة مرور خاطئة'); return; }
+  if(!isValidEmail(email)){ toast('اكتب بريد إلكتروني صحيح'); return; }
+  if(!pass){ toast('اكتب كلمة المرور'); return; }
+  if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
+
+  if(email !== ADMIN_EMAIL){
+    toast('هذا البريد ما عنده صلاحية دخول الإدارة');
+    return;
+  }
+
+  try{
+    await _auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    console.error('admin signIn failed', e);
+    if(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'){ toast('كلمة المرور غير صحيحة'); }
+    else if(e.code === 'auth/user-not-found'){ toast('حساب الإدارة ما انسوى بعد على Firebase — راجع الإعدادات'); }
+    else { toast('تعذّر تسجيل الدخول، تأكد من اتصال الإنترنت'); }
+    return;
+  }
+
   adminAuthed = true;
   saveAdminSession();
   renderAdminPanel();
@@ -2157,36 +2175,9 @@ async function adminLogin(){
 function adminLogout(){
   adminAuthed = false;
   clearAdminSession();
+  try{ if(_auth) _auth.signOut(); }catch(e){}
   renderAdminLogin();
   toast('تم تسجيل خروج الإدارة');
-}
-function renderAdminChangePassword(){
-  document.getElementById('adminView').innerHTML = `
-    <div class="card">
-      <div class="eyebrow">إعدادات الإدارة</div>
-      <h3>🔑 تغيير كلمة مرور الإدارة</h3>
-      <label>كلمة المرور الحالية</label>
-      <input type="password" id="admCurrentPass" placeholder="••••••••">
-      <label>كلمة المرور الجديدة</label>
-      <input type="password" id="admNewPass" placeholder="اختر كلمة مرور قوية">
-      <label>تأكيد كلمة المرور الجديدة</label>
-      <input type="password" id="admNewPassConfirm" placeholder="اكتبها مرة ثانية">
-      <button class="btn btn-primary" style="margin-top:16px;" onclick="adminChangePassword()">حفظ كلمة المرور الجديدة</button>
-      <button class="btn btn-ghost" style="margin-top:10px;" onclick="renderAdminPanel()">إلغاء</button>
-    </div>
-  `;
-}
-async function adminChangePassword(){
-  const current = document.getElementById('admCurrentPass').value;
-  const next = document.getElementById('admNewPass').value;
-  const confirm = document.getElementById('admNewPassConfirm').value;
-  const correctPass = await getAdminPassword();
-  if(current !== correctPass){ toast('كلمة المرور الحالية غير صحيحة'); return; }
-  if(!next || next.length < 6){ toast('كلمة المرور الجديدة لازم تكون 6 أحرف على الأقل'); return; }
-  if(next !== confirm){ toast('كلمة المرور الجديدة غير متطابقة'); return; }
-  await storageSet('admin-password', next);
-  toast('تم تغيير كلمة مرور الإدارة ✅');
-  renderAdminPanel();
 }
 
 async function renderAdminPanel(){
@@ -2203,7 +2194,6 @@ async function renderAdminPanel(){
     <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <div class="eyebrow" style="margin:0;">لوحة الإدارة</div>
       <div style="display:flex; gap:14px;">
-        <button class="link-btn" onclick="renderAdminChangePassword()">🔑 تغيير كلمة المرور</button>
         <button class="link-btn" style="color:var(--danger);" onclick="adminLogout()">خروج ⏻</button>
       </div>
     </div>
