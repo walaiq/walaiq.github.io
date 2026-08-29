@@ -1054,6 +1054,8 @@ function backToLanding(){
     renderAdminPanel();
     return;
   }
+  // ننظف الرابط من ?biz=...&mode=scan/join — لو خليناه بالرابط، أي رفرش بعدها يرجع يفتح نفس وضع المسح/الانضمام من جديد
+  try{ window.history.replaceState({}, document.title, window.location.pathname); }catch(e){}
   document.getElementById('landingView').classList.remove('hidden');
   const waFloat = document.getElementById('lpWaFloat');
   if(waFloat) waFloat.classList.remove('hidden');
@@ -2283,6 +2285,25 @@ async function searchMyCards(){
   }
 }
 
+// ننتظر فايربيس يتأكد فعلياً من حالة تسجيل الدخول (بعد الرفرش يضل فاضي لجزء من الثانية) —
+// نستخدمها بس بالأماكن اللي تتحقق من الدخول مباشرة، عشان ما نعلّق باقي الصفحة بلا داعي
+let _authReadyPromise = null;
+function waitForAuthReady(){
+  if(_authReadyPromise) return _authReadyPromise;
+  _authReadyPromise = new Promise((resolve) => {
+    if(!_auth){ resolve(null); return; }
+    let done = false;
+    const unsub = _auth.onAuthStateChanged((user) => {
+      if(done) return;
+      done = true;
+      try{ unsub(); }catch(e){}
+      resolve(user);
+    });
+    setTimeout(() => { if(!done){ done = true; resolve(_auth.currentUser); } }, 3000); // احتياط لو تأخر كثير
+  });
+  return _authReadyPromise;
+}
+
 /* ================= STAFF: scanner page ================= */
 async function renderStaffScanner(bizId){
   const biz = await getBusiness(bizId);
@@ -2293,7 +2314,9 @@ async function renderStaffScanner(bizId){
   }
   // الكاشير لازم يسجل دخول بنفس بريد وكلمة مرور صاحب العمل قبل ما يقدر يضيف أي ختم —
   // هذا يمنع أي شخص يعرف رابط المسح بس (بدون الحساب) من التلاعب بنقاط الزبائن
-  if(!_auth || !_auth.currentUser || (_auth.currentUser.email||'').toLowerCase() !== (biz.email||'').toLowerCase()){
+  area.innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري التحقق من حسابك...</p></div>`;
+  const user = await waitForAuthReady();
+  if(!user || (user.email||'').toLowerCase() !== (biz.email||'').toLowerCase()){
     renderStaffScannerLogin(bizId, biz);
     return;
   }
@@ -2361,6 +2384,9 @@ function staffScannerLogout(bizId){
 }
 
 async function backFromStaffScanner(){
+  // ننظف الرابط من ?biz=...&mode=scan أول شي — لو خليناه، أي رفرش بعدها يرجعك لصفحة الماسح من جديد
+  try{ window.history.replaceState({}, document.title, window.location.pathname); }catch(e){}
+
   const showDashboard = async (biz, bizId) => {
     currentBiz = await ensureTrialDates(biz);
     saveBizSession(bizId);
@@ -2376,8 +2402,9 @@ async function backFromStaffScanner(){
   // الطريقة الأولى (الأوثق): نستخدم إيميل الحساب المسجّل دخوله فعلياً بـ Firebase —
   // هذا موجود أكيد لأن صفحة الماسح أصلاً ما تفتح إلا بعد تسجيل دخول صحيح
   try{
-    if(_auth && _auth.currentUser && _auth.currentUser.email){
-      const bizId = await getBizIdByEmail(_auth.currentUser.email.toLowerCase());
+    const user = await waitForAuthReady();
+    if(user && user.email){
+      const bizId = await getBizIdByEmail(user.email.toLowerCase());
       if(bizId){
         const biz = await getBusiness(bizId);
         if(biz){ await showDashboard(biz, bizId); return; }
@@ -2995,22 +3022,7 @@ async function toggleSubscription(bizId){
   renderAdminPanel();
 }
 
-// نستنى فايربيس يخلص استرجاع جلسة الدخول المحفوظة (Firebase Auth) قبل ما نشغّل التطبيق —
-// لأنه بعد كل رفرش، _auth.currentUser يضل فاضي (null) لجزء من الثانية لين فايربيس يتأكد من الحالة الحقيقية.
-// لو شغّلنا init() قبل هذا، أي شاشة تتحقق من تسجيل الدخول (زي صفحة الماسح) بتحسبك "مو داخل" غلط.
-let _authInitDone = false;
-function startApp(){
-  if(_authInitDone) return;
-  _authInitDone = true;
-  init();
-}
-if(_auth){
-  _auth.onAuthStateChanged(function(){ startApp(); });
-  // احتياط: لو لأي سبب onAuthStateChanged تأخر كثير، ما نخلي المستخدم يعلق بلا شي
-  setTimeout(startApp, 2000);
-} else {
-  startApp();
-}
+init();
 </script>
 </body>
 </html>
