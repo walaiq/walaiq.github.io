@@ -207,6 +207,73 @@
   .lp-btn-ghost{background:rgba(255,255,255,.08); color:rgba(255,255,255,.85); border:1.5px solid rgba(255,255,255,.25); font-size:13px; font-weight:700;}
   .lp-mock-wrap{margin-top:22px; display:flex; justify-content:center;}
 
+  /* ================= مشهد الـHero المتحرك (3 فصول، دورة 9 ثواني، تلقائي ومتكرر) ================= */
+  .hero-cinema{position:relative; width:100%; max-width:320px; height:230px; border-radius:22px; overflow:hidden;
+    background:linear-gradient(150deg, var(--primary-dark), var(--primary) 55%, #2A2154 100%);
+    box-shadow:0 18px 40px -16px rgba(11,14,31,.55);}
+  .hc-act{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:18px; opacity:0;}
+  .hc-act1{animation:hcAct1 9s ease-in-out infinite;}
+  .hc-act2{animation:hcAct2 9s ease-in-out infinite;}
+  .hc-act3{animation:hcAct3 9s ease-in-out infinite;}
+  @keyframes hcAct1{ 0%,1%{opacity:0;} 3%,29%{opacity:1;} 32%,100%{opacity:0;} }
+  @keyframes hcAct2{ 0%,34%{opacity:0;} 36%,62%{opacity:1;} 65%,100%{opacity:0;} }
+  @keyframes hcAct3{ 0%,67%{opacity:0;} 69%,96%{opacity:1;} 99%,100%{opacity:0;} }
+
+  .hc-card{max-width:270px; width:100%; background:linear-gradient(135deg, var(--accent), #4A3FA0); margin:0; animation:none;}
+  .hc-card .stamp{opacity:0;}
+  .hc-s1{animation:hcStampPop 9s ease infinite;}
+  .hc-s2{animation:hcStampPop 9s ease infinite; animation-delay:.35s;}
+  .hc-s3{animation:hcStampPop 9s ease infinite; animation-delay:.7s;}
+  .hc-s4{animation:hcStampPop 9s ease infinite; animation-delay:1.05s;}
+  .hc-s5{animation:hcStampPop 9s ease infinite; animation-delay:1.4s;}
+  @keyframes hcStampPop{
+    0%{opacity:0; transform:scale(.3);}
+    2.5%{opacity:1; transform:scale(1.25);}
+    4%{transform:scale(1);}
+    29%{opacity:1; transform:scale(1);}
+    32%,100%{opacity:0; transform:scale(.3);}
+  }
+
+  .hc-journey{display:flex; flex-direction:column; align-items:center; gap:6px; width:100%;}
+  .hc-step{display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:7px 14px; opacity:0; transform:translateY(10px); width:100%; max-width:220px;}
+  .hc-step .hc-ico{font-size:16px; width:22px; text-align:center; color:#fff; font-weight:900;}
+  .hc-step .hc-txt{font-size:12px; font-weight:800; color:#fff;}
+  .hc-caption{opacity:0; transform:translateY(8px); font-size:12.5px; font-weight:800; color:var(--accent); margin-top:4px;}
+  .hc-j1{animation:hcStepIn 9s ease infinite; animation-delay:3.55s;}
+  .hc-j2{animation:hcStepIn 9s ease infinite; animation-delay:3.95s;}
+  .hc-j3{animation:hcStepIn 9s ease infinite; animation-delay:4.35s;}
+  .hc-j4{animation:hcStepIn 9s ease infinite; animation-delay:4.75s;}
+  .hc-j5{animation:hcCaptionIn 9s ease infinite; animation-delay:5.2s;}
+  @keyframes hcStepIn{
+    0%{opacity:0; transform:translateY(10px);}
+    3%{opacity:1; transform:translateY(0);}
+    27%{opacity:1; transform:translateY(0);}
+    30%,100%{opacity:0; transform:translateY(10px);}
+  }
+  @keyframes hcCaptionIn{
+    0%{opacity:0; transform:translateY(8px);}
+    4%{opacity:1; transform:translateY(0);}
+    22%{opacity:1; transform:translateY(0);}
+    26%,100%{opacity:0; transform:translateY(8px);}
+  }
+
+  .hc-dash{width:100%; max-width:250px;}
+  .hc-dash-title{color:rgba(255,255,255,.65); font-size:11px; font-weight:700; margin-bottom:10px; text-align:center;}
+  .hc-stats-row{display:flex; gap:10px; margin-bottom:10px;}
+  .hc-stat{flex:1; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:12px 8px; text-align:center;}
+  .hc-num{font-size:20px; font-weight:900; color:#fff; direction:ltr;}
+  .hc-lbl{font-size:11px; color:rgba(255,255,255,.65); font-weight:700; margin-top:2px;}
+  .hc-pct-row{background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:10px 12px; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .hc-pct-num{font-size:16px; font-weight:900; color:#8CF0B0; direction:ltr;}
+  .hc-pct-lbl{font-size:11.5px; color:rgba(255,255,255,.75); font-weight:700;}
+
+  .hc-dots{position:absolute; bottom:10px; left:0; right:0; display:flex; justify-content:center; gap:6px;}
+  .hc-dot{width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.28);}
+  .hc-d1{animation:hcDot 9s ease infinite;}
+  .hc-d2{animation:hcDot 9s ease infinite; animation-delay:3s;}
+  .hc-d3{animation:hcDot 9s ease infinite; animation-delay:6s;}
+  @keyframes hcDot{ 0%,3%{background:rgba(255,255,255,.28); transform:scale(1);} 6%,30%{background:#fff; transform:scale(1.3);} 33%,100%{background:rgba(255,255,255,.28); transform:scale(1);} }
+
   .lp-section{margin-bottom:20px;}
   .lp-section-title{text-align:center; margin-bottom:16px;}
   .lp-section-eyebrow{font-size:11px; font-weight:800; color:var(--accent); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;}
@@ -399,19 +466,52 @@
         <button class="lp-btn lp-btn-ghost" style="flex:1; min-width:120px;" onclick="scrollToHowItWorks()">شاهد كيف تعمل</button>
       </div>
       <div class="lp-mock-wrap">
-        <div class="loycard" style="max-width:320px; width:100%; background:linear-gradient(135deg, var(--primary), var(--primary-dark));">
-          <div class="lc-top">
-            <div><div class="lc-name">مقهى المثال</div><div class="lc-sub">بطاقة ولاء رقمية</div></div>
-            <div class="lc-badge shine">★</div>
+        <div class="hero-cinema">
+          <!-- الفصل 1: البطاقة وتعبئة الأختام -->
+          <div class="hc-act hc-act1">
+            <div class="loycard hc-card">
+              <div class="lc-top">
+                <div><div class="lc-name">مقهى المثال</div><div class="lc-sub">بطاقة ولاء رقمية</div></div>
+                <div class="lc-badge shine">★</div>
+              </div>
+              <div class="stampgrid">
+                <div class="stamp filled hc-s1">⭐</div>
+                <div class="stamp filled hc-s2">⭐</div>
+                <div class="stamp filled hc-s3">⭐</div>
+                <div class="stamp filled hc-s4">⭐</div>
+                <div class="stamp filled hc-s5">🎁</div>
+              </div>
+              <div class="lc-foot">
+                <div class="lc-reward">مشروب مجاني بعد 5 زيارات</div>
+                <div class="lc-points">5/5</div>
+              </div>
+            </div>
           </div>
-          <div class="stampgrid">
-            <div class="stamp filled">⭐</div><div class="stamp filled">⭐</div><div class="stamp filled">⭐</div>
-            <div class="stamp"></div><div class="stamp"></div>
+
+          <!-- الفصل 2: رحلة الزبون -->
+          <div class="hc-act hc-act2">
+            <div class="hc-journey">
+              <div class="hc-step hc-j1"><span class="hc-ico">📱</span><span class="hc-txt">يمسح QR</span></div>
+              <div class="hc-step hc-j2"><span class="hc-ico">✓</span><span class="hc-txt">يحصل على ختم</span></div>
+              <div class="hc-step hc-j3"><span class="hc-ico">5</span><span class="hc-txt">الختم الخامس</span></div>
+              <div class="hc-step hc-j4"><span class="hc-ico">🎁</span><span class="hc-txt">مكافأة!</span></div>
+              <div class="hc-caption hc-j5">"زبون رجع مرة ثانية"</div>
+            </div>
           </div>
-          <div class="lc-foot">
-            <div class="lc-reward">مشروب مجاني بعد 5 زيارات</div>
-            <div class="lc-points">3/5</div>
+
+          <!-- الفصل 3: لوحة تحكم حية -->
+          <div class="hc-act hc-act3">
+            <div class="hc-dash">
+              <div class="hc-dash-title">لوحتك اللحظية</div>
+              <div class="hc-stats-row">
+                <div class="hc-stat"><div class="hc-num" id="hcNum1">0</div><div class="hc-lbl">عميل</div></div>
+                <div class="hc-stat"><div class="hc-num" id="hcNum2">0</div><div class="hc-lbl">زيارة</div></div>
+              </div>
+              <div class="hc-pct-row"><span class="hc-pct-num" id="hcNum3">+0%</span><span class="hc-pct-lbl">عملاء عائدين</span></div>
+            </div>
           </div>
+
+          <div class="hc-dots"><span class="hc-dot hc-d1"></span><span class="hc-dot hc-d2"></span><span class="hc-dot hc-d3"></span></div>
         </div>
       </div>
     </div>
@@ -1252,6 +1352,26 @@ function resetHiwAutoplay(){
 }
 resetHiwAutoplay();
 
+/* عدّاد أرقام لوحة التحكم بمشهد الـHero — يتزامن مع دخول الفصل الثالث بالـCSS (تقريباً 6.2 ثانية من كل دورة 9 ثواني) */
+function animateHeroCount(elId, target, duration, isPct){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const start = performance.now();
+  function step(now){
+    const p = Math.min(1, (now - start) / duration);
+    const val = Math.round(target * p);
+    el.textContent = isPct ? ('+' + val + '%') : val.toLocaleString('en-US');
+    if(p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function playHeroDashCount(){
+  animateHeroCount('hcNum1', 1284, 1300, false);
+  animateHeroCount('hcNum2', 2941, 1300, false);
+  animateHeroCount('hcNum3', 18, 1300, true);
+}
+setTimeout(function(){ playHeroDashCount(); setInterval(playHeroDashCount, 9000); }, 6200);
+
 function goToApp(mode){
   document.getElementById('landingView').classList.add('hidden');
   document.getElementById('lpWaFloat').classList.add('hidden');
@@ -1913,6 +2033,7 @@ async function renderMerchantDashboard(){
       <div class="eyebrow">الصفحة الرئيسية</div>
       <h3>💬 شارك رأيك بمنصة ختم</h3>
       <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px;">رأيك يظهر بقسم "آراء عملائنا" بالصفحة الرئيسية العامة، باسم محلك. أنت بس تقدر تعدّل أو تحذف رأيك.</p>
+      ${myTestimonial ? `<div style="background:var(--accent-light); color:var(--primary-dark); font-size:12.5px; font-weight:800; padding:8px 12px; border-radius:10px; margin-bottom:8px;">✅ رأيك منشور حالياً — أي تعديل تسويه بالنص تحت لازم تضغط "حفظ التعديل" حتى يترفع</div>` : ''}
       <textarea id="myTestimonialText" placeholder="مثال: صار زبوني يرجعلي أكثر بعد ما بدأنا بختم">${escapeHTML(myTestimonial ? myTestimonial.text : '')}</textarea>
       <div style="display:flex; gap:8px; margin-top:12px;">
         <button class="btn btn-accent" style="flex:1;" onclick="submitMyTestimonial()">${myTestimonial ? 'حفظ التعديل' : 'نشر رأيي'}</button>
