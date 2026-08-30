@@ -1405,6 +1405,42 @@ async function loadAllCustomers(bizId){
   return {list, index};
 }
 
+/* ================= نظام الدرجات المتعددة (لا يرجع صفر، مكافآت متدرجة) =================
+   biz.rewardTiers: [{points:5, reward:'خصم 10%'}, {points:10, reward:'خصم 15%'}, ...] مرتبة تصاعدياً
+   لو ما فيه rewardTiers (حسابات قديمة)، نستخدم threshold/rewardText القدامى كدرجة وحيدة تتكرر */
+function getRewardTiers(biz){
+  if(biz.rewardTiers && biz.rewardTiers.length){
+    return biz.rewardTiers.slice().sort((a,b)=>a.points-b.points);
+  }
+  return [{points: biz.threshold||6, reward: biz.rewardText||'مكافأة'}];
+}
+
+function getTierProgress(biz, totalPoints){
+  totalPoints = totalPoints || 0;
+  const tiers = getRewardTiers(biz);
+  for(let i=0;i<tiers.length;i++){
+    if(totalPoints < tiers[i].points){
+      const rangeStart = i===0 ? 0 : tiers[i-1].points;
+      return {
+        nextTierPoints: tiers[i].points, nextTierReward: tiers[i].reward,
+        rangeStart, rangeSize: tiers[i].points - rangeStart,
+        progressInRange: totalPoints - rangeStart, tierNumber: i+1
+      };
+    }
+  }
+  // تجاوز آخر درجة معرّفة — نكرر بنفس المسافة بين آخر درجتين، بنفس آخر مكافأة، للأبد
+  const last = tiers[tiers.length-1];
+  const prev = tiers.length>1 ? tiers[tiers.length-2] : {points:0};
+  const step = Math.max(1, last.points - prev.points);
+  const cyclesPast = Math.floor((totalPoints - last.points) / step) + 1;
+  const rangeStart = last.points + (cyclesPast-1)*step;
+  return {
+    nextTierPoints: rangeStart + step, nextTierReward: last.reward,
+    rangeStart, rangeSize: step,
+    progressInRange: totalPoints - rangeStart, tierNumber: tiers.length + cyclesPast
+  };
+}
+
 function customerSegments(customers, threshold){
   const today = new Date();
   const todayMD = today.getMonth()+'-'+today.getDate();
@@ -1552,6 +1588,7 @@ async function renderMerchantDashboard(){
 
   const {list:customers} = await loadAllCustomers(currentBiz.id);
   let totalStamps = 0; customers.forEach(c=>totalStamps+=(c.points||0));
+  let pendingRewards = 0; customers.forEach(c=>pendingRewards+=(c.unclaimedRewards||0));
   const broadcasts = currentBiz.broadcasts || [];
   const myTestimonial = await getMyTestimonial(currentBiz.id);
 
@@ -1591,6 +1628,10 @@ async function renderMerchantDashboard(){
       <div class="stat-box tone-family"><div class="num">${customers.length}</div><div class="lbl">زبون</div></div>
       <div class="stat-box tone-accent"><div class="num">${totalStamps}</div><div class="lbl">ختم إجمالي</div></div>
     </div>
+    ${pendingRewards > 0 ? `
+    <div class="stat-row">
+      <div class="stat-box tone-sky" style="flex:1;"><div class="num">${pendingRewards}</div><div class="lbl">🎁 جوائز بانتظار التسليم</div></div>
+    </div>` : ''}
 
     <button class="btn btn-ghost" style="width:100%;" onclick="renderMerchantStats()">📊 لوحة الإحصائيات الكاملة</button>
 
@@ -1721,16 +1762,18 @@ async function exportCustomersCSV(){
   const {list:customers} = await loadAllCustomers(currentBiz.id);
   if(!customers || customers.length === 0){ toast('ما فيه زبائن بعد للتصدير'); return; }
 
-  const headers = ['اسم الزبون', 'رقم الهاتف', 'النقاط الحالية', 'متبقي للمكافأة', 'تاريخ الانضمام', 'تاريخ الميلاد'];
+  const headers = ['اسم الزبون', 'رقم الهاتف', 'إجمالي الأختام', 'متبقي للمكافأة الجاية', 'المكافأة الجاية', 'مكافآت مستلمة', 'مكافآت بانتظار التسليم', 'تاريخ الانضمام', 'تاريخ الميلاد', 'آخر زيارة'];
   const rows = customers
     .slice()
     .sort((a,b) => (b.points||0) - (a.points||0)) // الأعلى نقاط أول
     .map(c => {
       const points = c.points || 0;
-      const remaining = Math.max(0, (currentBiz.threshold||0) - points);
+      const tp = getTierProgress(currentBiz, points);
+      const remaining = Math.max(0, tp.rangeSize - tp.progressInRange);
       const joined = c.joinedAt ? new Date(c.joinedAt).toLocaleDateString('ar') : '';
       const bday = c.birthday ? new Date(c.birthday).toLocaleDateString('ar') : '';
-      return [c.name || c.phone, c.phone, points, remaining, joined, bday];
+      const lastVisit = c.lastVisitAt ? new Date(c.lastVisitAt).toLocaleDateString('ar') : '';
+      return [c.name || c.phone, c.phone, points, remaining, tp.nextTierReward, c.totalRewards||0, c.unclaimedRewards||0, joined, bday, lastVisit];
     });
 
   const lines = [headers, ...rows].map(row => row.map(csvEscape).join(','));
@@ -1848,10 +1891,10 @@ function selectSegment(key){
 
 function cardPreviewHTML(biz, custData){
   const points = custData.points || 0;
-  const threshold = biz.threshold;
+  const tp = getTierProgress(biz, points);
   let stamps = '';
-  for(let i=1;i<=threshold;i++){
-    stamps += `<div class="stamp ${i<=points?'filled':''}">${i<=points?'⭐':''}</div>`;
+  for(let i=1;i<=tp.rangeSize;i++){
+    stamps += `<div class="stamp ${i<=tp.progressInRange?'filled':''}">${i<=tp.progressInRange?'⭐':''}</div>`;
   }
   const offers = (biz.offers||[]);
   const chipPalette = [
@@ -1871,8 +1914,8 @@ function cardPreviewHTML(biz, custData){
       </div>
       <div class="stampgrid">${stamps}</div>
       <div class="lc-foot">
-        <div class="lc-reward">${escapeHTML(biz.rewardText)}</div>
-        <div class="lc-points">${points}/${threshold}</div>
+        <div class="lc-reward">${escapeHTML(tp.nextTierReward)}</div>
+        <div class="lc-points">${tp.progressInRange}/${tp.rangeSize}</div>
       </div>
     </div>
     ${offersHTML}
@@ -1894,20 +1937,34 @@ function renderCustomerListHTML(customers){
   if(customers.length===0){
     return `<div class="empty"><span class="icon">🗂️</span><p>ما فيه زبائن بعد.<br>شارك رابط الانضمام أو ضيف زبون يدوياً.</p></div>`;
   }
-  return customers.map(c => `
+  return customers.map(c => {
+    const tp = getTierProgress(currentBiz, c.points||0);
+    const unclaimed = c.unclaimedRewards || 0;
+    return `
     <div class="cust-item">
       <div class="cust-info">
         <div class="cust-avatar">${escapeHTML((c.name||'?')[0])}</div>
         <div><div class="cust-name">${escapeHTML(c.name)}</div><div class="cust-phone">${escapeHTML(c.phone)}</div></div>
       </div>
       <div class="cust-actions">
-        <span class="pts-pill">${c.points}/${currentBiz.threshold}</span>
+        ${unclaimed > 0 ? `<button class="icon-btn" style="background:var(--accent-light); color:var(--primary-dark);" onclick="deliverReward('${c.phone}')" title="سلّم المكافأة">🎁 ${unclaimed}</button>` : ''}
+        <span class="pts-pill">${tp.progressInRange}/${tp.rangeSize}</span>
         <a class="icon-btn" style="text-decoration:none; color:#25D366;" href="${whatsappLink(c.phone, 'مرحباً '+c.name+'، ')}" target="_blank" rel="noopener" title="واتساب">💬</a>
         <button class="icon-btn plus" onclick="addStamp('${c.phone}')" title="أضف ختم">+</button>
         <button class="icon-btn" onclick="removeCustomer('${c.phone}')" title="حذف">🗑</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+async function deliverReward(phone){
+  const cust = await getCustomer(currentBiz.id, phone);
+  if(!cust || !(cust.unclaimedRewards>0)) return;
+  cust.unclaimedRewards -= 1;
+  await saveCustomer(currentBiz.id, phone, cust);
+  toast('تم تسليم المكافأة ✅');
+  renderMerchantDashboard();
 }
 
 function renderBroadcastListHTML(broadcasts){
@@ -1958,9 +2015,15 @@ async function listRecentStamps(bizId, days){
 async function addStamp(phone){
   const cust = await getCustomer(currentBiz.id, phone);
   if(!cust) return;
-  let rewardEarned = false;
-  if(cust.points < currentBiz.threshold) cust.points += 1;
-  else { cust.points = 0; rewardEarned = true; cust.totalRewards = (cust.totalRewards||0) + 1; toast(`🎉 ${cust.name} استحق المكافأة! تم تصفير البطاقة`); }
+  const before = getTierProgress(currentBiz, cust.points||0);
+  cust.points = (cust.points||0) + 1;
+  const after = getTierProgress(currentBiz, cust.points);
+  const rewardEarned = after.tierNumber > before.tierNumber; // عبرنا درجة كاملة بهالختم
+  if(rewardEarned){
+    cust.totalRewards = (cust.totalRewards||0) + 1;
+    cust.unclaimedRewards = (cust.unclaimedRewards||0) + 1;
+    toast(`🎉 ${cust.name} استحق: ${before.nextTierReward}!`);
+  }
   cust.lastVisitAt = new Date().toISOString();
   cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(currentBiz.id, phone, cust);
@@ -2053,17 +2116,37 @@ function renderEditCard(){
         <div><label>لون البطاقة</label><div class="color-row"><input type="color" id="edPrimary" value="${currentBiz.primary}"></div></div>
         <div><label>لون التمييز</label><div class="color-row"><input type="color" id="edAccent" value="${currentBiz.accent}"></div></div>
       </div>
-      <label>عدد الزيارات للمكافأة</label>
-      <input type="text" id="edThreshold" value="${currentBiz.threshold}" inputmode="numeric">
-      <label>نص المكافأة</label>
-      <input type="text" id="edReward" value="${escapeHTML(currentBiz.rewardText)}">
-      <label>عروضك الحالية (سطر لكل عرض)</label>
+      <label>درجات المكافآت (تتراكم للأبد، ما ترجع صفر)</label>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 8px;">مثال: عند الختم 5 خصم 10%، وعند الختم 10 خصم 15%. بعد آخر درجة، النظام يكرر نفس المسافة ونفس آخر مكافأة تلقائياً.</p>
+      <div id="edTiersList">${getRewardTiers(currentBiz).map((t,i)=>tierRowHTML(t.points, t.reward, i)).join('')}</div>
+      <button type="button" class="btn btn-ghost" style="margin-top:6px;" onclick="addTierRow()">➕ أضف درجة</button>
+      <label style="margin-top:14px;">عروضك الحالية (سطر لكل عرض)</label>
       <textarea id="edOffers">${escapeHTML(offersText)}</textarea>
       <button class="btn btn-primary" style="margin-top:16px;" onclick="saveCardEdit()">حفظ التعديلات</button>
       <button class="btn btn-ghost" style="margin-top:10px;" onclick="renderMerchantDashboard()">إلغاء</button>
     </div>
   `;
   window._editCategory = curCat;
+}
+
+function tierRowHTML(points, reward, i){
+  return `
+    <div class="row-2 tier-row" data-idx="${i}" style="align-items:flex-end; gap:8px; margin-bottom:8px;">
+      <div style="flex:0 0 80px;"><label style="font-size:11px;">عند ختم</label><input type="text" class="edTierPoints" value="${points}" inputmode="numeric"></div>
+      <div style="flex:1;"><label style="font-size:11px;">المكافأة</label><input type="text" class="edTierReward" value="${escapeHTML(reward)}"></div>
+      <button type="button" class="icon-btn" onclick="removeTierRow(this)" title="حذف الدرجة">🗑</button>
+    </div>
+  `;
+}
+function addTierRow(){
+  const list = document.getElementById('edTiersList');
+  const idx = list.children.length;
+  list.insertAdjacentHTML('beforeend', tierRowHTML(idx*5+5, '', idx));
+}
+function removeTierRow(btn){
+  const rows = document.querySelectorAll('#edTiersList .tier-row');
+  if(rows.length <= 1){ toast('لازم تبقى درجة وحدة على الأقل'); return; }
+  btn.closest('.tier-row').remove();
 }
 
 function selectEditCategory(catId){
@@ -2079,8 +2162,21 @@ async function saveCardEdit(){
   currentBiz.foundedAt = document.getElementById('edFoundedAt').value || currentBiz.foundedAt || '';
   currentBiz.primary = document.getElementById('edPrimary').value;
   currentBiz.accent = document.getElementById('edAccent').value;
-  currentBiz.threshold = parseInt(document.getElementById('edThreshold').value) || currentBiz.threshold;
-  currentBiz.rewardText = document.getElementById('edReward').value.trim() || currentBiz.rewardText;
+
+  const tierRows = document.querySelectorAll('#edTiersList .tier-row');
+  const tiers = [];
+  for(const row of tierRows){
+    const pts = parseInt(row.querySelector('.edTierPoints').value) || 0;
+    const reward = row.querySelector('.edTierReward').value.trim();
+    if(pts > 0 && reward){ tiers.push({points: pts, reward}); }
+  }
+  if(tiers.length === 0){ toast('لازم درجة مكافأة وحدة على الأقل، بعدد ونص صحيحين'); return; }
+  tiers.sort((a,b)=>a.points-b.points);
+  currentBiz.rewardTiers = tiers;
+  // نحافظ على threshold/rewardText للتوافق مع أي مكان قديم يعتمد عليهم مباشرة
+  currentBiz.threshold = tiers[0].points;
+  currentBiz.rewardText = tiers[0].reward;
+
   currentBiz.offers = document.getElementById('edOffers').value.split('\n').map(s=>s.trim()).filter(Boolean);
   await saveBusiness(currentBiz.id, currentBiz);
   if(oldName !== newName){
@@ -2240,12 +2336,12 @@ function renderPersonalQr(containerId, bizId, phone){
 // same as cardPreviewHTML but standalone (no dependency on currentBiz)
 function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
   const points = custData.points || 0;
-  const threshold = biz.threshold;
+  const tp = getTierProgress(biz, points);
   const seen = typeof lastSeenPoints === 'number' ? lastSeenPoints : points; // لو ما مررنا قيمة، ما نعتبر أي ختم "جديد"
   let stamps = '';
-  for(let i=1;i<=threshold;i++){
-    const isFilled = i<=points;
-    const isNew = isFilled && i>seen;
+  for(let i=1;i<=tp.rangeSize;i++){
+    const isFilled = i<=tp.progressInRange;
+    const isNew = isFilled && (tp.rangeStart+i) > seen;
     stamps += `<div class="stamp ${isFilled?'filled':''} ${isNew?'stamp-new':''}">${isFilled?'⭐':''}</div>`;
   }
   const offers = (biz.offers||[]);
@@ -2260,26 +2356,29 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
   }).join('')}</div>` : '';
 
   // شريط معلومات إضافية: آخر زيارة، كم باقي للمكافأة، ومكافآته السابقة
-  const remaining = Math.max(0, threshold - points);
+  const remaining = Math.max(0, tp.rangeSize - tp.progressInRange);
   let progressLine;
   if(points === 0){
     progressLine = `👋 ابدأ رحلتك! أول ختم بانتظارك`;
   } else if(remaining === 0){
-    progressLine = `🎉 مكافأتك جاهزة! خذها بزيارتك الجاية`;
+    progressLine = `🎉 مكافأتك جاهزة: ${escapeHTML(tp.nextTierReward)}!`;
   } else if(remaining === 1){
-    progressLine = `🎁 باقي لك ختم وحد بس للمكافأة!`;
+    progressLine = `🎁 باقي لك ختم وحد بس لـ "${escapeHTML(tp.nextTierReward)}"`;
   } else {
-    progressLine = `🎁 باقي لك ${remaining} أختام للمكافأة`;
+    progressLine = `🎁 باقي لك ${remaining} أختام لـ "${escapeHTML(tp.nextTierReward)}"`;
   }
   const lastVisitLine = custData.lastVisitAt
     ? `آخر زيارة: ${new Date(custData.lastVisitAt).toLocaleDateString('ar')}`
     : `أول زيارة لك — أهلاً فيك 🤍`;
   const rewardsCount = custData.totalRewards || 0;
+  const unclaimed = custData.unclaimedRewards || 0;
   const rewardsLine = rewardsCount > 0 ? `🏆 حصلت على ${rewardsCount} مكافأة لهسه` : '';
+  const unclaimedLine = unclaimed > 0 ? `<div style="color:var(--accent); font-weight:800;">🎁 عندك ${unclaimed} مكافأة جاهزة استلمها من الموظف!</div>` : '';
 
   const infoStripHTML = `
     <div class="card-info-strip" style="margin-top:10px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; color:var(--ink); line-height:2;">
       <div style="font-weight:700;">${progressLine}</div>
+      ${unclaimedLine}
       <div style="color:var(--muted);">${lastVisitLine}</div>
       ${rewardsLine ? `<div style="color:var(--muted);">${rewardsLine}</div>` : ''}
     </div>
@@ -2293,8 +2392,8 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
       </div>
       <div class="stampgrid">${stamps}</div>
       <div class="lc-foot">
-        <div class="lc-reward">${escapeHTML(biz.rewardText)}</div>
-        <div class="lc-points">${points}/${threshold}</div>
+        <div class="lc-reward">${escapeHTML(tp.nextTierReward)}</div>
+        <div class="lc-points">${tp.progressInRange}/${tp.rangeSize}</div>
       </div>
     </div>
     ${infoStripHTML}
@@ -2616,9 +2715,15 @@ async function staffAddStamp(bizId){
     resultArea.innerHTML = `<div class="empty" style="margin-top:14px;"><span class="icon">🔍</span><p>ما فيه زبون بهذا الرقم.<br>خله ينضم أول من رابط QR.</p></div>`;
     return;
   }
-  let rewardEarned = false;
-  if(cust.points < biz.threshold) cust.points += 1;
-  else { cust.points = 0; rewardEarned = true; cust.totalRewards = (cust.totalRewards||0) + 1; toast('🎉 استحق المكافأة! تم تصفير البطاقة'); }
+  const before = getTierProgress(biz, cust.points||0);
+  cust.points = (cust.points||0) + 1;
+  const after = getTierProgress(biz, cust.points);
+  const rewardEarned = after.tierNumber > before.tierNumber;
+  if(rewardEarned){
+    cust.totalRewards = (cust.totalRewards||0) + 1;
+    cust.unclaimedRewards = (cust.unclaimedRewards||0) + 1;
+    toast(`🎉 استحق: ${before.nextTierReward}!`);
+  }
   cust.lastVisitAt = new Date().toISOString();
   cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(bizId, phone, cust);
@@ -2626,7 +2731,8 @@ async function staffAddStamp(bizId){
   resultArea.innerHTML = `
     <div style="margin-top:16px;">
       <p class="center-note" style="margin-bottom:0;">${escapeHTML(cust.name)}</p>
-      <div class="big-num">${cust.points}/${biz.threshold}</div>
+      <div class="big-num">${after.progressInRange}/${after.rangeSize}</div>
+      ${rewardEarned ? `<p class="center-note" style="color:var(--accent); font-weight:800;">🎁 ${escapeHTML(before.nextTierReward)}</p>` : ''}
     </div>
   `;
   toast('تمت إضافة ختم ✅');
