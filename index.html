@@ -2092,7 +2092,7 @@ async function renderMerchantDashboard(){
       <label>الاسم</label>
       <input type="text" id="newCustName" placeholder="اسم الزبون">
       <label>رقم الجوال</label>
-      <input type="tel" id="newCustPhone" placeholder="05xxxxxxxx" dir="ltr">
+      <input type="tel" id="newCustPhone" placeholder="07xxxxxxxxx" dir="ltr">
       <label>تاريخ الميلاد (اختياري)</label>
       <input type="text" id="newCustBday" placeholder="مثال: 2000-05-14" dir="ltr">
       <button class="btn btn-accent" style="margin-top:14px;" onclick="addCustomer()">إضافة الزبون</button>
@@ -2631,7 +2631,7 @@ async function renderJoinFlow(bizId){
     </div>
     <div class="card" id="joinFormCard">
       <label>رقم جوالك</label>
-      <input type="tel" id="joinPhone" placeholder="05xxxxxxxx" dir="ltr" autofocus>
+      <input type="tel" id="joinPhone" placeholder="07xxxxxxxxx" dir="ltr" autofocus>
       <label style="margin-top:12px;">سنة ميلادك</label>
       <input type="tel" id="joinBirthYear" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr">
       <button class="btn btn-primary" style="margin-top:16px;" onclick="submitJoin('${bizId}')">انضم الآن / افتح بطاقتي</button>
@@ -2870,7 +2870,7 @@ function renderCustomerLookupEntry(){
       <h3>ابحث برقم جوالك</h3>
       <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">اكتب رقمك وسنة ميلادك وبنطلعلك كل بطاقاتك المسجّلة — حتى لو عندك أكثر من بطاقة بأكثر من محل.</p>
       <label>رقم جوالك</label>
-      <input type="tel" id="lookupPhone" placeholder="05xxxxxxxx" dir="ltr">
+      <input type="tel" id="lookupPhone" placeholder="07xxxxxxxxx" dir="ltr">
       <label style="margin-top:10px;">سنة ميلادك</label>
       <input type="tel" id="lookupBirthYear" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr">
       <button class="btn btn-primary" style="margin-top:14px; width:100%;" onclick="searchMyCards()">بحث</button>
@@ -3001,7 +3001,7 @@ async function renderStaffScanner(bizId){
         <div style="flex:1; height:1px; background:var(--border);"></div>
       </div>
       <label>رقم جوال الزبون</label>
-      <input type="tel" id="scanPhone" placeholder="05xxxxxxxx" dir="ltr">
+      <input type="tel" id="scanPhone" placeholder="07xxxxxxxxx" dir="ltr">
       <button class="btn btn-primary" style="margin-top:14px;" onclick="staffAddStamp('${bizId}')">إضافة ختم</button>
       <div id="scanResult"></div>
     </div>
