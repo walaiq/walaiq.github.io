@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
   const firebaseConfig = {
@@ -24,10 +26,18 @@
   };
   let _db = null;
   let _auth = null;
+  let _messaging = null;
+  let _functions = null;
+  // 🔴 [إجراء مطلوب] رابط VAPID Key من: Firebase Console → إعدادات المشروع → Cloud Messaging → Web Push certificates → أنشئ زوج مفاتيح جديد
+  const FCM_VAPID_KEY = 'YOUR_VAPID_KEY_HERE';
   try{
     firebase.initializeApp(firebaseConfig);
     _db = firebase.firestore();
     _auth = firebase.auth();
+    _functions = firebase.functions();
+    if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
+      _messaging = firebase.messaging();
+    }
   }catch(e){ console.error('Firebase init failed', e); }
 
   // ====== إعدادات EmailJS (لإرسال كود التحقق الحقيقي على البريد الإلكتروني) ======
@@ -2169,7 +2179,16 @@ async function renderMerchantDashboard(){
       <p style="font-size:12.5px; color:var(--muted); margin-bottom:4px;">اختر لمين توصل الرسالة:</p>
       <div class="segment-choice" id="segChoice"></div>
       <textarea id="broadcastMsg" placeholder="اكتب رسالتك هنا..." style="margin-top:12px;"></textarea>
-      <button class="btn btn-primary" style="margin-top:12px;" onclick="sendBroadcast()">إرسال</button>
+      <div style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" id="sendAsPush" checked style="width:16px; height:16px;"> إرسال كإشعار مباشر للجوال (لمن فعّل الإذن)
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" id="saveInCard" checked style="width:16px; height:16px;"> حفظ الرسالة داخل بطاقة الزبون (يشوفها حتى لو ما فعّل الإشعارات)
+        </label>
+      </div>
+      <button class="btn btn-primary" style="margin-top:12px;" onclick="sendBroadcast()">🚀 إرسال الآن</button>
+      <div id="pushSendResult"></div>
       <div id="broadcastList" style="margin-top:14px;">${renderBroadcastListHTML(broadcasts)}</div>
       <div id="waSendListWrap"></div>
     </div>
@@ -2551,21 +2570,45 @@ async function removeCustomer(phone){
 async function sendBroadcast(){
   const text = document.getElementById('broadcastMsg').value.trim();
   if(!text){ toast('اكتب رسالة أول'); return; }
+  const sendPush = document.getElementById('sendAsPush').checked;
+  const saveCard = document.getElementById('saveInCard').checked;
   const {list:customers} = await loadAllCustomers(currentBiz.id);
   const segs = customerSegments(customers, currentBiz.threshold);
   const segKey = window._selectedSegment || 'all';
   const segLabels = {all:'كل الزبائن', new:'زبائن جدد', returning:'زبائن راجعين', birthday:'عيد ميلادهم اليوم', inactive30:'غابوا 30 يوم+'};
   const targetList = segs[segKey];
 
-  const broadcasts = currentBiz.broadcasts || [];
-  broadcasts.push({text, time:new Date().toISOString(), count:targetList.length, segmentLabel:segLabels[segKey]});
-  currentBiz.broadcasts = broadcasts;
-  await saveBusiness(currentBiz.id, {broadcasts});
-  toast(`تم الحفظ — راح تظهر لـ ${targetList.length} زبون لما يفتحون بطاقتهم 📣`);
+  if(saveCard){
+    const broadcasts = currentBiz.broadcasts || [];
+    broadcasts.push({text, time:new Date().toISOString(), count:targetList.length, segmentLabel:segLabels[segKey]});
+    currentBiz.broadcasts = broadcasts;
+    await saveBusiness(currentBiz.id, {broadcasts});
+  }
+
+  const resultEl = document.getElementById('pushSendResult');
+  if(sendPush){
+    if(!_functions){
+      resultEl.innerHTML = `<div class="note" style="color:var(--danger); margin-top:10px;">⚠️ خدمة الإشعارات المباشرة مو مفعّلة على هذا الجهاز/المتصفح.</div>`;
+    } else {
+      resultEl.innerHTML = `<p style="text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px;">جاري الإرسال...</p>`;
+      try{
+        const callSend = _functions.httpsCallable('sendNotification');
+        const res = await callSend({ bizId: currentBiz.id, segment: segKey, message: text });
+        const {sent, total} = res.data;
+        resultEl.innerHTML = `<div style="background:var(--accent-light); color:var(--primary-dark); font-weight:800; font-size:12.5px; padding:10px 12px; border-radius:10px; margin-top:10px;">📲 وصل فعلياً لـ ${sent} من ${total} جهاز مفعّل الإشعارات عندهم.</div>`;
+      }catch(e){
+        console.error('sendNotification failed', e);
+        resultEl.innerHTML = `<div class="note" style="color:var(--danger); margin-top:10px;">⚠️ تعذّر إرسال الإشعار المباشر (${escapeHTML(e.message||'خطأ غير معروف')}). الرسالة انحفظت داخل البطاقة برضو لو فعّلت الخيار الثاني.</div>`;
+      }
+    }
+  }
+
+  toast(saveCard ? `تم — راح تظهر لـ ${targetList.length} زبون لما يفتحون بطاقتهم 📣` : 'تم الإرسال ✅');
+  document.getElementById('broadcastMsg').value = '';
+  document.getElementById('broadcastList').innerHTML = renderBroadcastListHTML(currentBiz.broadcasts || []);
 
   window._lastBroadcastWaTargets = targetList.map(c => ({phone:c.phone, name:c.name}));
   window._lastBroadcastText = text;
-  renderMerchantDashboard();
   renderWhatsappSendList();
 }
 
@@ -2787,8 +2830,27 @@ async function showCustomerCard(bizId, cust){
   renderPersonalQr('custPersonalQr', bizId, cust.phone);
   watchCustomerCardLive(bizId, biz, cust);
   saveCustomerSession(bizId, cust.phone);
+  maybeAskPushPermission(bizId, cust.phone);
   // نثبّت الرابط بشكل يرجّعه لبطاقته بالضبط لو سوّى رفرش، بدل ما يرجع للصفحة الرئيسية
   try{ window.history.replaceState({}, document.title, window.location.pathname + '?biz=' + encodeURIComponent(bizId) + '&mode=join'); }catch(e){}
+}
+
+/* ================= إشعارات Push حقيقية (FCM) ================= */
+async function maybeAskPushPermission(bizId, phone){
+  try{
+    if(!_messaging || typeof Notification === 'undefined') return;
+    if(Notification.permission === 'denied') return; // ما نلح لو رفض قبل
+    if(FCM_VAPID_KEY === 'YOUR_VAPID_KEY_HERE') return; // ما زال الإعداد ناقص
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted') return;
+    const token = await _messaging.getToken({ vapidKey: FCM_VAPID_KEY });
+    if(!token) return;
+    const cust = await getCustomer(bizId, phone);
+    if(cust && cust.fcmToken !== token){
+      cust.fcmToken = token;
+      await saveCustomer(bizId, phone, cust);
+    }
+  }catch(e){ console.error('maybeAskPushPermission failed', e); }
 }
 
 /* -------- تحديث بطاقة الزبون تلقائياً بلحظة إضافة الختم (بدون رفرش) -------- */
