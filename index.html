@@ -373,11 +373,13 @@
 
   .lp-final-cta{background:var(--ink); border-radius:20px; padding:26px 20px; text-align:center; color:#fff;}
 
-  .lp-devs{text-align:center; padding:22px 10px 8px; opacity:.85;}
-  .lp-devs-label{font-size:10.5px; color:var(--muted); margin-bottom:4px;}
-  .lp-devs-company{font-size:12px; font-weight:800; color:var(--ink); margin-bottom:8px;}
-  .lp-devs-name{display:inline-flex; align-items:center; gap:6px; font-size:15px; color:#fff; background:linear-gradient(135deg, var(--accent), #4A3FA0); text-decoration:none; font-weight:800; padding:9px 18px; border-radius:30px; box-shadow:0 6px 16px -6px rgba(108,92,231,.5); transition:transform .15s ease, box-shadow .15s ease;}
-  .lp-devs-name:active{transform:scale(.94); box-shadow:0 2px 8px -3px rgba(108,92,231,.5);}
+  .lp-devs{text-align:center; margin-top:26px; padding:24px 18px; background:linear-gradient(160deg, var(--surface), #FAFAFF); border:1px solid var(--border); border-radius:22px; box-shadow:0 14px 30px -18px rgba(20,20,50,.25);}
+  .lp-devs-label{font-size:10.5px; letter-spacing:.5px; color:var(--muted); font-weight:800; text-transform:uppercase; margin-bottom:12px;}
+  .lp-devs-links{display:flex; flex-direction:column; align-items:center; gap:10px;}
+  .lp-devs-name{display:inline-flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); background:var(--surface); text-decoration:none; font-weight:800; padding:9px 16px 9px 10px; border-radius:30px; border:1px solid var(--border); box-shadow:0 4px 12px -6px rgba(20,20,50,.18); transition:transform .15s ease, box-shadow .15s ease;}
+  .lp-devs-name:active{transform:scale(.95); box-shadow:0 2px 6px -3px rgba(20,20,50,.2);}
+  .lp-fb-ico{display:flex; width:22px; height:22px; flex-shrink:0;}
+  .lp-fb-ico svg{width:100%; height:100%; display:block; filter:drop-shadow(0 1px 2px rgba(24,119,242,.35));}
   .lp-final-cta h3{font-family:'Cairo',sans-serif; font-weight:900; font-size:18px; margin-bottom:8px;}
   .lp-final-cta p{font-size:12.5px; opacity:.8; margin-bottom:16px; line-height:1.7;}
   .price-toggle{display:flex; background:var(--accent-light); border-radius:16px; padding:4px; gap:4px; margin-bottom:20px;}
@@ -768,8 +770,16 @@
 
     <div class="lp-devs">
       <div class="lp-devs-label">تطوير</div>
-      <div class="lp-devs-company">شركة HHM للحلول الرقمية</div>
-      <a class="lp-devs-name" href="https://www.facebook.com/almlek11" target="_blank" rel="noopener"><span>📘</span> Hussein H Mohammed</a>
+      <div class="lp-devs-links">
+        <a class="lp-devs-name" href="https://www.facebook.com/almlek11" target="_blank" rel="noopener">
+          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
+          Hussein H Mohammed
+        </a>
+        <a class="lp-devs-name" href="https://www.facebook.com/aiqmedia89" target="_blank" rel="noopener">
+          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
+          شركة HHM للحلول البرمجية
+        </a>
+      </div>
     </div>
   </div>
 
