@@ -934,6 +934,87 @@ async function deleteEmailIndex(email){
 }
 
 function escapeHTML(str){ const d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
+
+/* ================= حماية بطاقة الزبون برمز 4 أرقام ================= */
+async function sha256Hex(text){
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function pinGateShell(bizName, title, desc, bodyHTML){
+  return `
+    <div class="topbar" style="padding-top:0;">
+      <div class="brand">${escapeHTML(bizName)} <small>ختم</small></div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">حماية بطاقتك</div>
+      <h3>${title}</h3>
+      <p style="font-size:12.5px; color:var(--muted);">${desc}</p>
+      ${bodyHTML}
+    </div>
+  `;
+}
+
+async function renderPinSetup(targetId, bizId, phone, cust, onSuccess){
+  const el = document.getElementById(targetId);
+  const biz = await getBusiness(bizId);
+  el.innerHTML = pinGateShell(biz.name, '🔒 سنة ميلادك تحمي بطاقتك',
+    'هذا يمنع أي شخص ثاني يعرف رقم جوالك من فتح بطاقتك — وما راح تنساها أبداً لأنها سنة ميلادك.',
+    `
+      <input type="tel" id="pinSetup1" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr" style="text-align:center; font-size:24px; letter-spacing:6px;">
+      <button class="btn btn-primary" style="margin-top:14px; width:100%;" onclick="confirmPinSetup('${targetId}','${bizId}','${phone}')">تأكيد وفتح بطاقتي</button>
+    `
+  );
+  window._pinCust = cust;
+  window._pinCallback = onSuccess;
+}
+
+async function confirmPinSetup(targetId, bizId, phone){
+  const p1 = document.getElementById('pinSetup1').value.trim();
+  const year = parseInt(p1, 10);
+  const nowYear = new Date().getFullYear();
+  if(!/^\d{4}$/.test(p1) || year < 1930 || year > nowYear - 5){ toast('اكتب سنة ميلاد صحيحة (4 أرقام)'); return; }
+  const cust = window._pinCust;
+  cust.pinHash = await sha256Hex(phone + ':' + p1);
+  await saveCustomer(bizId, phone, cust);
+  const cb = window._pinCallback;
+  if(cb) await cb(cust);
+}
+
+async function renderPinVerify(targetId, bizId, phone, cust, onSuccess){
+  const el = document.getElementById(targetId);
+  const biz = await getBusiness(bizId);
+  el.innerHTML = pinGateShell(biz.name, '🔒 اكتب سنة ميلادك', 'حماية لبطاقتك من أي شخص ثاني يعرف رقم جوالك.',
+    `
+      <input type="tel" id="pinVerifyInput" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr" style="text-align:center; font-size:24px; letter-spacing:6px;" autofocus>
+      <button class="btn btn-primary" style="margin-top:14px; width:100%;" onclick="confirmPinVerify('${targetId}','${bizId}','${phone}')">فتح بطاقتي</button>
+      <button class="link-btn" style="margin-top:10px;" onclick="showForgotPinHelp('${bizId}')">ناسي سنة ميلادك المسجّلة؟</button>
+    `
+  );
+  window._pinCust = cust;
+  window._pinCallback = onSuccess;
+}
+
+async function confirmPinVerify(targetId, bizId, phone){
+  const p1 = document.getElementById('pinVerifyInput').value.trim();
+  if(!/^\d{4}$/.test(p1)){ toast('اكتب سنة الميلاد (4 أرقام)'); return; }
+  const cust = window._pinCust;
+  const hash = await sha256Hex(phone + ':' + p1);
+  if(hash !== cust.pinHash){ toast('سنة الميلاد غلط، حاول مرة ثانية'); return; }
+  const cb = window._pinCallback;
+  if(cb) await cb(cust);
+}
+
+async function showForgotPinHelp(bizId){
+  const biz = await getBusiness(bizId);
+  showConfirmModal(
+    'ناسي سنة ميلادك المسجّلة؟',
+    `يصير أحياناً تسجّل سنة غلط بالغلط. روح لصاحب "${biz.name}" واطلب منه يصفّر الحماية من لوحته — بعدها تقدر تسجّل سنة ميلادك الصحيحة من جديد.`,
+    'تمام',
+    () => {}
+  );
+}
 function shade(hex, percent){
   try{
     let num = parseInt(hex.replace('#',''),16);
@@ -2277,6 +2358,7 @@ function renderCustomerListHTML(customers){
       <div class="cust-actions">
         ${unclaimed > 0 ? `<button class="icon-btn" style="background:var(--accent-light); color:var(--primary-dark);" onclick="deliverReward('${c.phone}')" title="سلّم المكافأة">🎁 ${unclaimed}</button>` : ''}
         <span class="pts-pill">${tp.progressInRange}/${tp.rangeSize}</span>
+        ${c.pinHash ? `<button class="icon-btn" onclick="resetCustomerPin('${c.phone}')" title="إعادة تعيين رمز الحماية">🔓</button>` : ''}
         <a class="icon-btn" style="text-decoration:none; color:#25D366;" href="${whatsappLink(c.phone, 'مرحباً '+c.name+'، ')}" target="_blank" rel="noopener" title="واتساب">💬</a>
         <button class="icon-btn plus" onclick="addStamp('${c.phone}')" title="أضف ختم">+</button>
         <button class="icon-btn" onclick="removeCustomer('${c.phone}')" title="حذف">🗑</button>
@@ -2293,6 +2375,22 @@ async function deliverReward(phone){
   await saveCustomer(currentBiz.id, phone, cust);
   toast('تم تسليم المكافأة ✅');
   renderMerchantDashboard();
+}
+
+async function resetCustomerPin(phone){
+  showConfirmModal(
+    'إعادة تعيين الحماية',
+    'الزبون بيقدر يسجّل سنة ميلاده من جديد أول ما يفتح بطاقته. متأكد إنك تبي تصفّر الحماية الحالية؟',
+    'إعادة تعيين',
+    async () => {
+      const cust = await getCustomer(currentBiz.id, phone);
+      if(!cust) return;
+      cust.pinHash = null;
+      await saveCustomer(currentBiz.id, phone, cust);
+      toast('تم — الزبون يقدر يسجّل سنة ميلاده من جديد الحين ✅');
+      renderMerchantDashboard();
+    }
+  );
 }
 
 function renderBroadcastListHTML(broadcasts){
@@ -2547,15 +2645,26 @@ async function submitJoin(bizId){
 
   const existing = await getCustomer(bizId, phone);
   if(existing){
-    toast('عندك بطاقة مسجّلة، هذي هي 👇');
-    await showCustomerCard(bizId, existing);
+    if(existing.pinHash){
+      await renderPinVerify('customerView', bizId, phone, existing, async (cust) => {
+        toast('عندك بطاقة مسجّلة، هذي هي 👇');
+        await showCustomerCard(bizId, cust);
+      });
+    } else {
+      await renderPinSetup('customerView', bizId, phone, existing, async (cust) => {
+        toast('عندك بطاقة مسجّلة، هذي هي 👇');
+        await showCustomerCard(bizId, cust);
+      });
+    }
     return;
   }
 
-  const cust = {name:phone, phone, points:0, birthday:null, joinedAt:new Date().toISOString()};
+  const cust = {name:phone, phone, points:0, birthday:null, joinedAt:new Date().toISOString(), pinHash:null};
   await saveCustomer(bizId, phone, cust);
-  toast('أهلاً بك! تم إنشاء بطاقتك 🎉');
-  await showCustomerCard(bizId, cust);
+  await renderPinSetup('customerView', bizId, phone, cust, async (updatedCust) => {
+    toast('أهلاً بك! تم إنشاء بطاقتك 🎉');
+    await showCustomerCard(bizId, updatedCust);
+  });
 }
 
 async function backFromCustomerCard(){
@@ -2784,7 +2893,12 @@ async function searchMyCards(){
   if(matches.length === 1){
     document.getElementById('mainTabs').classList.add('hidden');
     document.getElementById('landingView').classList.add('hidden');
-    await showCustomerCard(matches[0].bizId, matches[0].cust);
+    const m = matches[0];
+    if(m.cust.pinHash){
+      await renderPinVerify('customerCardArea', m.bizId, phone, m.cust, async (cust) => { await showCustomerCard(m.bizId, cust); });
+    } else {
+      await renderPinSetup('customerCardArea', m.bizId, phone, m.cust, async (cust) => { await showCustomerCard(m.bizId, cust); });
+    }
     return;
   }
 
