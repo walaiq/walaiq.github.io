@@ -2632,39 +2632,46 @@ async function renderJoinFlow(bizId){
     <div class="card" id="joinFormCard">
       <label>رقم جوالك</label>
       <input type="tel" id="joinPhone" placeholder="05xxxxxxxx" dir="ltr" autofocus>
-      <button class="btn btn-primary" style="margin-top:16px;" onclick="submitJoin('${bizId}')">انضم الآن</button>
-      <div class="note">بطاقتك تحفظ برقم جوالك فقط — هذا هو معرّفك الوحيد. احتفظ به لفتح بطاقتك لاحقاً من تبويب «بطاقتي».</div>
+      <label style="margin-top:12px;">سنة ميلادك</label>
+      <input type="tel" id="joinBirthYear" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr">
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="submitJoin('${bizId}')">انضم الآن / افتح بطاقتي</button>
+      <div class="note">رقمك وسنة ميلادك هي طريقة فتح بطاقتك دايماً — تمنع أي شخص ثاني يعرف رقمك بس من يشوف بطاقتك.</div>
     </div>
   `;
 }
 
 async function submitJoin(bizId){
   const phone = document.getElementById('joinPhone').value.trim();
+  const birthYearStr = document.getElementById('joinBirthYear').value.trim();
   if(!phone){ toast('اكتب رقم جوالك'); return; }
   if(!/^[0-9+]{7,15}$/.test(phone)){ toast('اكتب رقم جوال صحيح'); return; }
+  const year = parseInt(birthYearStr, 10);
+  const nowYear = new Date().getFullYear();
+  if(!/^\d{4}$/.test(birthYearStr) || year < 1930 || year > nowYear - 5){ toast('اكتب سنة ميلاد صحيحة (4 أرقام)'); return; }
 
   const existing = await getCustomer(bizId, phone);
+  const enteredHash = await sha256Hex(phone + ':' + birthYearStr);
+
   if(existing){
     if(existing.pinHash){
-      await renderPinVerify('customerView', bizId, phone, existing, async (cust) => {
-        toast('عندك بطاقة مسجّلة، هذي هي 👇');
-        await showCustomerCard(bizId, cust);
-      });
-    } else {
-      await renderPinSetup('customerView', bizId, phone, existing, async (cust) => {
-        toast('عندك بطاقة مسجّلة، هذي هي 👇');
-        await showCustomerCard(bizId, cust);
-      });
+      // زبون قديم وعنده حماية مسجّلة أصلاً — لازم سنة الميلاد تطابق
+      if(enteredHash !== existing.pinHash){ toast('سنة الميلاد ما تطابق المسجّلة عندنا لهذا الرقم'); return; }
+      toast('عندك بطاقة مسجّلة، هذي هي 👇');
+      await showCustomerCard(bizId, existing);
+      return;
     }
+    // زبون قديم بس ما عنده حماية مسجّلة بعد (حساب من قبل هالميزة) — نسجّلها الحين
+    existing.pinHash = enteredHash;
+    await saveCustomer(bizId, phone, existing);
+    toast('عندك بطاقة مسجّلة، هذي هي 👇');
+    await showCustomerCard(bizId, existing);
     return;
   }
 
-  const cust = {name:phone, phone, points:0, birthday:null, joinedAt:new Date().toISOString(), pinHash:null};
+  const cust = {name:phone, phone, points:0, birthday:null, joinedAt:new Date().toISOString(), pinHash:enteredHash};
   await saveCustomer(bizId, phone, cust);
-  await renderPinSetup('customerView', bizId, phone, cust, async (updatedCust) => {
-    toast('أهلاً بك! تم إنشاء بطاقتك 🎉');
-    await showCustomerCard(bizId, updatedCust);
-  });
+  toast('أهلاً بك! تم إنشاء بطاقتك 🎉');
+  await showCustomerCard(bizId, cust);
 }
 
 async function backFromCustomerCard(){
@@ -2861,11 +2868,12 @@ function renderCustomerLookupEntry(){
     <div class="card">
       <div class="eyebrow">🔍 دور على بطاقتك</div>
       <h3>ابحث برقم جوالك</h3>
-      <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">اكتب رقمك وبنطلعلك كل بطاقاتك المسجّلة — حتى لو عندك أكثر من بطاقة بأكثر من محل.</p>
-      <div style="display:flex; gap:8px;">
-        <input type="tel" id="lookupPhone" placeholder="05xxxxxxxx" dir="ltr" style="flex:1;">
-        <button class="btn btn-primary btn-sm" onclick="searchMyCards()">بحث</button>
-      </div>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">اكتب رقمك وسنة ميلادك وبنطلعلك كل بطاقاتك المسجّلة — حتى لو عندك أكثر من بطاقة بأكثر من محل.</p>
+      <label>رقم جوالك</label>
+      <input type="tel" id="lookupPhone" placeholder="05xxxxxxxx" dir="ltr">
+      <label style="margin-top:10px;">سنة ميلادك</label>
+      <input type="tel" id="lookupBirthYear" maxlength="4" inputmode="numeric" placeholder="مثال: 1998" dir="ltr">
+      <button class="btn btn-primary" style="margin-top:14px; width:100%;" onclick="searchMyCards()">بحث</button>
     </div>
     <div id="customerCardArea"></div>
   `;
@@ -2873,12 +2881,17 @@ function renderCustomerLookupEntry(){
 
 async function searchMyCards(){
   const phone = document.getElementById('lookupPhone').value.trim();
+  const birthYearStr = document.getElementById('lookupBirthYear').value.trim();
   const area = document.getElementById('customerCardArea');
   if(!phone){ toast('اكتب رقم جوالك'); return; }
+  const year = parseInt(birthYearStr, 10);
+  const nowYear = new Date().getFullYear();
+  if(!/^\d{4}$/.test(birthYearStr) || year < 1930 || year > nowYear - 5){ toast('اكتب سنة ميلاد صحيحة (4 أرقام)'); return; }
   area.innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري البحث...</p></div>`;
 
+  const enteredHash = await sha256Hex(phone + ':' + birthYearStr);
   const bizList = await listBusinesses();
-  const matches = [];
+  let matches = [];
   for(const biz of bizList){
     const cust = await getCustomer(biz.id, phone);
     if(cust) matches.push({bizId:biz.id, biz, cust});
@@ -2889,16 +2902,29 @@ async function searchMyCards(){
     return;
   }
 
+  // نتحقق من سنة الميلاد لكل بطاقة — لو ما عندها حماية مسجّلة بعد نسجّلها الحين، ولو عندها ولا تطابق نستبعدها
+  const verified = [];
+  for(const m of matches){
+    if(!m.cust.pinHash){
+      m.cust.pinHash = enteredHash;
+      await saveCustomer(m.bizId, phone, m.cust);
+      verified.push(m);
+    } else if(m.cust.pinHash === enteredHash){
+      verified.push(m);
+    }
+  }
+  matches = verified;
+
+  if(matches.length === 0){
+    area.innerHTML = `<div class="card"><div class="empty"><span class="icon">🔒</span><p>سنة الميلاد ما تطابق المسجّلة عندنا لهذا الرقم.</p></div></div>`;
+    return;
+  }
+
   // لو عنده بطاقة وحدة بس، نستخدم نفس مسار البطاقة الرسمي (يحفظ الجلسة والرابط، ويقفل التنقل بره)
   if(matches.length === 1){
     document.getElementById('mainTabs').classList.add('hidden');
     document.getElementById('landingView').classList.add('hidden');
-    const m = matches[0];
-    if(m.cust.pinHash){
-      await renderPinVerify('customerCardArea', m.bizId, phone, m.cust, async (cust) => { await showCustomerCard(m.bizId, cust); });
-    } else {
-      await renderPinSetup('customerCardArea', m.bizId, phone, m.cust, async (cust) => { await showCustomerCard(m.bizId, cust); });
-    }
+    await showCustomerCard(matches[0].bizId, matches[0].cust);
     return;
   }
 
