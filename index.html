@@ -424,6 +424,40 @@
   .modal-box p{font-size:13.5px; color:var(--muted); line-height:1.8; margin-bottom:18px;}
   .modal-actions{display:flex; gap:10px;}
   .modal-actions .btn{flex:1;}
+
+  /* ================= تجاوب حقيقي لكل الأجهزة (تابلت + حاسبة) =================
+     التطبيق الداخلي (لوحة التاجر/الزبون/الإدارة) يضل بعرض مريح متل تطبيق حقيقي حتى بشاشة كبيرة —
+     بس الصفحة الرئيسية (التسويقية) تتمدد وتستخدم عرض الشاشة صح، بدل ما تضل عمود ضيق بنص شاشة فاضية */
+  @media (min-width:768px){
+    .wrap{max-width:900px;}
+    #mainTabs, #merchantView, #customerView, #adminView{max-width:520px; margin-left:auto; margin-right:auto;}
+    .site-header{margin-left:calc(-50vw + 50%); margin-right:calc(-50vw + 50%); padding-left:40px; padding-right:40px;}
+    .site-header-inner{max-width:900px; margin:0 auto;}
+
+    .lp-hero{display:flex; align-items:center; gap:40px; text-align:right; padding:46px 40px;}
+    .lp-hero-text{flex:1; min-width:0;}
+    .lp-cta-row{justify-content:flex-start;}
+    .lp-tagline{margin-right:2px;}
+    .lp-mock-wrap{flex:0 0 340px; margin-top:0;}
+
+    .lp-feature-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+    .compare-cards{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+    .lp-story-card, .lp-final-cta{max-width:640px; margin-left:auto; margin-right:auto;}
+    .partners-viewport{max-width:640px; margin:0 auto;}
+    #testimonialsRow{max-width:640px; margin:0 auto;}
+    .faq-list{max-width:640px; margin:0 auto;}
+    .lp-devs{max-width:520px; margin-left:auto; margin-right:auto;}
+    .phone-mock{max-width:300px;}
+  }
+
+  @media (min-width:1100px){
+    .wrap{max-width:1120px;}
+    .site-header-inner{max-width:1120px;}
+    .lp-hero{padding:60px 56px;}
+    .lp-h1{font-size:38px;}
+    .lp-feature-grid{grid-template-columns:repeat(3,1fr);}
+    .compare-cards{grid-template-columns:repeat(3,1fr);}
+  }
 </style>
 </head>
 <body>
@@ -466,6 +500,7 @@
       </div>
     </header>
     <div class="lp-hero">
+      <div class="lp-hero-text">
       <div class="lp-eyebrow">خَتم — منصة الولاء الرقمية لنشاطك التجاري</div>
       <h1 class="lp-h1">خلّي زبونك<br>يرجع لك أكثر</h1>
       <p class="lp-sub">بطاقات ولاء رقمية، مكافآت، QR، وإدارة عملائك — كل شيء بمكان واحد.</p>
@@ -473,6 +508,7 @@
       <div class="lp-cta-row" style="flex-direction:row; flex-wrap:wrap;">
         <button class="lp-btn lp-btn-primary" style="flex:1.6; min-width:160px;" onclick="goToApp('register')">ابدأ مجانًا</button>
         <button class="lp-btn lp-btn-ghost" style="flex:1; min-width:120px;" onclick="scrollToHowItWorks()">شاهد كيف تعمل</button>
+      </div>
       </div>
       <div class="lp-mock-wrap">
         <div class="hero-cinema">
