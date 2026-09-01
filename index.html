@@ -12,7 +12,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
   const firebaseConfig = {
@@ -27,14 +26,14 @@
   let _db = null;
   let _auth = null;
   let _messaging = null;
-  let _functions = null;
   // 🔴 [إجراء مطلوب] رابط VAPID Key من: Firebase Console → إعدادات المشروع → Cloud Messaging → Web Push certificates → أنشئ زوج مفاتيح جديد
   const FCM_VAPID_KEY = 'YOUR_VAPID_KEY_HERE';
+  // 🔴 [إجراء مطلوب] رابط خدمة الإرسال على Vercel، بعد النشر (مثال: https://ketm-notify.vercel.app/api/sendNotification)
+  const NOTIFY_API_URL = 'https://ketm-notify.vercel.app/api/sendNotification';
   try{
     firebase.initializeApp(firebaseConfig);
     _db = firebase.firestore();
     _auth = firebase.auth();
-    _functions = firebase.functions();
     if(firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()){
       _messaging = firebase.messaging();
     }
@@ -2587,14 +2586,20 @@ async function sendBroadcast(){
 
   const resultEl = document.getElementById('pushSendResult');
   if(sendPush){
-    if(!_functions){
-      resultEl.innerHTML = `<div class="note" style="color:var(--danger); margin-top:10px;">⚠️ خدمة الإشعارات المباشرة مو مفعّلة على هذا الجهاز/المتصفح.</div>`;
+    if(NOTIFY_API_URL.startsWith('YOUR_VERCEL')){
+      resultEl.innerHTML = `<div class="note" style="color:var(--danger); margin-top:10px;">⚠️ خدمة الإشعارات المباشرة مو مفعّلة بعد على هذا الموقع.</div>`;
     } else {
       resultEl.innerHTML = `<p style="text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px;">جاري الإرسال...</p>`;
       try{
-        const callSend = _functions.httpsCallable('sendNotification');
-        const res = await callSend({ bizId: currentBiz.id, segment: segKey, message: text });
-        const {sent, total} = res.data;
+        const idToken = await _auth.currentUser.getIdToken();
+        const resp = await fetch(NOTIFY_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+          body: JSON.stringify({ bizId: currentBiz.id, segment: segKey, message: text })
+        });
+        const resJson = await resp.json();
+        if(!resp.ok) throw new Error(resJson.error || 'فشل الإرسال');
+        const {sent, total} = resJson;
         resultEl.innerHTML = `<div style="background:var(--accent-light); color:var(--primary-dark); font-weight:800; font-size:12.5px; padding:10px 12px; border-radius:10px; margin-top:10px;">📲 وصل فعلياً لـ ${sent} من ${total} جهاز مفعّل الإشعارات عندهم.</div>`;
       }catch(e){
         console.error('sendNotification failed', e);
