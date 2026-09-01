@@ -2848,9 +2848,17 @@ async function maybeAskPushPermission(bizId, phone){
     if(!_messaging || typeof Notification === 'undefined'){ console.warn('push: messaging غير مدعوم بهالمتصفح'); return; }
     if(Notification.permission === 'denied'){ console.warn('push: الإذن مرفوض من قبل'); return; }
     if(FCM_VAPID_KEY === 'YOUR_VAPID_KEY_HERE') return; // ما زال الإعداد ناقص
+
+    // نسجّل Service Worker ونتأكد إنه فعّال قبل لا نطلب التوكن — يمنع خطأ "no active Service Worker"
+    let swReg = null;
+    if('serviceWorker' in navigator){
+      swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      await navigator.serviceWorker.ready;
+    }
+
     const perm = await Notification.requestPermission();
     if(perm !== 'granted'){ console.warn('push: المستخدم ما وافق', perm); return; }
-    const token = await _messaging.getToken({ vapidKey: FCM_VAPID_KEY });
+    const token = await _messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: swReg || undefined });
     if(!token){ console.warn('push: ما رجع توكن'); return; }
     const cust = await getCustomer(bizId, phone);
     if(cust && cust.fcmToken !== token){
