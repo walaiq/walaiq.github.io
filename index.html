@@ -27,7 +27,7 @@
   let _auth = null;
   let _messaging = null;
   // 🔴 [إجراء مطلوب] رابط VAPID Key من: Firebase Console → إعدادات المشروع → Cloud Messaging → Web Push certificates → أنشئ زوج مفاتيح جديد
-  const FCM_VAPID_KEY = 'YOUR_VAPID_KEY_HERE';
+  const FCM_VAPID_KEY = 'BB6AmWijXXRb6ySuLLfwJ8nPIcjNrwvtUyUkbr2fm9c0fEljCbkH4gA3TsDG8GAkZWZA_pV2C-RtKoJzxehZOf4';
   // 🔴 [إجراء مطلوب] رابط خدمة الإرسال على Vercel، بعد النشر (مثال: https://ketm-notify.vercel.app/api/sendNotification)
   const NOTIFY_API_URL = 'https://ketm-notify.vercel.app/api/sendNotification';
   try{
@@ -2591,7 +2591,9 @@ async function sendBroadcast(){
     } else {
       resultEl.innerHTML = `<p style="text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px;">جاري الإرسال...</p>`;
       try{
-        const idToken = await _auth.currentUser.getIdToken();
+        const authUser = await waitForAuthReady();
+        if(!authUser){ throw new Error('تعذّر التأكد من تسجيل دخولك، جرب تسجّل خروج وتدخل من جديد'); }
+        const idToken = await authUser.getIdToken();
         const resp = await fetch(NOTIFY_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
@@ -2843,19 +2845,23 @@ async function showCustomerCard(bizId, cust){
 /* ================= إشعارات Push حقيقية (FCM) ================= */
 async function maybeAskPushPermission(bizId, phone){
   try{
-    if(!_messaging || typeof Notification === 'undefined') return;
-    if(Notification.permission === 'denied') return; // ما نلح لو رفض قبل
+    if(!_messaging || typeof Notification === 'undefined'){ console.warn('push: messaging غير مدعوم بهالمتصفح'); return; }
+    if(Notification.permission === 'denied'){ console.warn('push: الإذن مرفوض من قبل'); return; }
     if(FCM_VAPID_KEY === 'YOUR_VAPID_KEY_HERE') return; // ما زال الإعداد ناقص
     const perm = await Notification.requestPermission();
-    if(perm !== 'granted') return;
+    if(perm !== 'granted'){ console.warn('push: المستخدم ما وافق', perm); return; }
     const token = await _messaging.getToken({ vapidKey: FCM_VAPID_KEY });
-    if(!token) return;
+    if(!token){ console.warn('push: ما رجع توكن'); return; }
     const cust = await getCustomer(bizId, phone);
     if(cust && cust.fcmToken !== token){
       cust.fcmToken = token;
-      await saveCustomer(bizId, phone, cust);
+      const ok = await saveCustomer(bizId, phone, cust);
+      console.log('push: تم حفظ التوكن؟', ok);
     }
-  }catch(e){ console.error('maybeAskPushPermission failed', e); }
+  }catch(e){
+    console.error('maybeAskPushPermission failed', e);
+    toast('⚠️ تعذّر تفعيل الإشعارات: ' + (e.message || e));
+  }
 }
 
 /* -------- تحديث بطاقة الزبون تلقائياً بلحظة إضافة الختم (بدون رفرش) -------- */
