@@ -816,19 +816,7 @@
       <button class="lp-btn lp-btn-primary" onclick="goToApp('register')">ابدأ تجربتك المجانية</button>
     </div>
 
-    <div class="lp-devs">
-      <div class="lp-devs-label">تطوير</div>
-      <div class="lp-devs-links">
-        <a class="lp-devs-name" href="https://www.facebook.com/almlek11" target="_blank" rel="noopener">
-          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
-          Hussein H Mohammed
-        </a>
-        <a class="lp-devs-name" href="https://www.facebook.com/Hhm89iq" target="_blank" rel="noopener">
-          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
-          شركة HHM للحلول البرمجية
-        </a>
-      </div>
-    </div>
+    ${devsFooterHTML()}
   </div>
 
   <div class="tabs hidden" id="mainTabs">
@@ -1004,6 +992,24 @@ async function deleteEmailIndex(email){
 }
 
 function escapeHTML(str){ const d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
+
+function devsFooterHTML(){
+  return `
+    <div class="lp-devs">
+      <div class="lp-devs-label">تطوير</div>
+      <div class="lp-devs-links">
+        <a class="lp-devs-name" href="https://www.facebook.com/almlek11" target="_blank" rel="noopener">
+          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
+          Hussein H Mohammed
+        </a>
+        <a class="lp-devs-name" href="https://www.facebook.com/Hhm89iq" target="_blank" rel="noopener">
+          <span class="lp-fb-ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#fff"/><path d="M15.2 12.7h-2v7.1h-3v-7.1H8.5v-2.6h1.7V8.4c0-1.6.7-3 3.2-3h2v2.5h-1.4c-.4 0-.7.2-.7.9v1.3h2.1l-.2 2.6z" fill="#1877F2"/></svg></span>
+          شركة HHM للحلول البرمجية
+        </a>
+      </div>
+    </div>
+  `;
+}
 
 /* ================= حماية بطاقة الزبون برمز 4 أرقام ================= */
 async function sha256Hex(text){
@@ -1639,6 +1645,7 @@ function renderMerchantLogin(){
       <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;"><button class="link-btn" onclick="showForgotPassword()">نسيت كلمة المرور؟</button></div>
       <div class="foot-link" style="margin-top:12px; font-size:12.5px; text-align:center;">ما عندك حساب؟ <button class="link-btn" onclick="renderMerchantRegister()">أنشئ حسابًا</button></div>
     </div>
+    ${devsFooterHTML()}
   `;
 }
 
@@ -2214,6 +2221,8 @@ async function renderMerchantDashboard(){
       </p>
       <a class="btn btn-primary" style="text-decoration:none;" href="https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، عندي استفسار بخصوص منصة ختم')}" target="_blank" rel="noopener">💬 تواصل معنا عبر واتساب</a>
     </div>
+
+    ${devsFooterHTML()}
   `;
 
   // render segment choice pills
@@ -2834,6 +2843,8 @@ async function showCustomerCard(bizId, cust){
       <div class="qr-wrap" id="custPersonalQr"></div>
       <p class="center-note">يمسحه الموظف بكاميرا جواله ليضيف لك ختم بضغطة وحدة — والبطاقة فوق تتحدث لحالها 🔴 مباشر</p>
     </div>
+
+    ${devsFooterHTML()}
   `;
   setLastSeenStamps(bizId, cust.phone, cust.points || 0);
   renderPersonalQr('custPersonalQr', bizId, cust.phone);
@@ -3164,6 +3175,7 @@ async function renderStaffScanner(bizId){
     </div>
     <button class="btn btn-ghost" style="margin-top:10px;" onclick="backFromStaffScanner()">⬅️ رجوع</button>
     <button class="link-btn" style="margin:14px auto; display:block; color:var(--danger);" onclick="staffScannerLogout('${bizId}')">تسجيل خروج الموظف</button>
+    ${devsFooterHTML()}
   `;
 }
 
@@ -3451,6 +3463,8 @@ async function renderAdminPanel(){
       <h3>🏢 كل الحسابات</h3>
       <div>${renderBizListHTML(businesses)}</div>
     </div>
+
+    ${devsFooterHTML()}
   `;
 }
 
