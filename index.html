@@ -422,6 +422,15 @@
   .faq-a{max-height:0; overflow:hidden; transition:.25s; font-size:13px; color:var(--muted); line-height:1.75; padding:0 16px;}
   .faq-item.open .faq-a{max-height:200px; padding:0 16px 14px;}
 
+  /* --- قسم "من نحن وسياستنا" (نفس أسلوب الأسئلة الشائعة، بس بمساحة أكبر للنص الطويل) --- */
+  .policy-list{display:flex; flex-direction:column; gap:10px;}
+  .policy-item{background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
+  .policy-q{width:100%; text-align:right; padding:14px 16px; font-weight:800; font-size:13.5px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .policy-q span{font-size:18px; color:var(--primary); transition:.2s; flex-shrink:0;}
+  .policy-item.open .policy-q span{transform:rotate(45deg);}
+  .policy-a{max-height:0; overflow:hidden; transition:.3s; font-size:12.5px; color:var(--muted); line-height:1.9; padding:0 16px;}
+  .policy-item.open .policy-a{max-height:900px; padding:0 16px 16px;}
+
   .lp-wa-float{position:fixed; bottom:20px; left:16px; width:52px; height:52px; border-radius:50%; background:#25D366; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 6px 16px -4px rgba(0,0,0,.35); z-index:60; text-decoration:none;}
 
   .big-num{font-family:'Cairo',sans-serif; font-weight:900; font-size:44px; color:var(--primary); text-align:center; margin:14px 0;}
@@ -806,6 +815,95 @@
         <div class="faq-item">
           <button class="faq-q" onclick="toggleFaq(this)">شنو يصير ببياناتي لو قررت أوقف؟ <span>+</span></button>
           <div class="faq-a">بياناتك تبقى محفوظة، وتقدر تصدّر نسخة احتياطية كاملة من لوحة تحكمك بأي وقت.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lp-section" id="privacyPolicy">
+      <div class="lp-section-title">
+        <div class="lp-section-eyebrow">من نحن</div>
+        <h2 class="lp-section-h2">من نحن وسياسة الخصوصية</h2>
+      </div>
+      <div class="policy-list">
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">01 — من نحن ونطاق السياسة <span>+</span></button>
+          <div class="policy-a">خَتم منصة تتيح للتاجر إصدار بطاقة ولاء رقمية بسيطة (رابط + رمز QR)، يحتفظ بها الزبون على جوّاله مباشرة بلا تطبيق ولا محفظة إلكترونية، وجمع الأختام عليها، ومنح مكافآت عند درجات يحدّدها التاجر بنفسه.<br><br>تنطبق هذه السياسة على موقعنا وعلى لوحة تحكم التاجر، وعلى رابط ماسح الموظفين، وعلى صفحة انضمام الزبون وبطاقته الرقمية.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">02 — المعلومات التي نجمعها <span>+</span></button>
+          <div class="policy-a">
+            <strong>بيانات حساب التاجر:</strong> اسم النشاط، واسم صاحب المحل، والمدينة، والبريد الإلكتروني، وكلمة مرور مشفّرة بالكامل عبر خدمة تسجيل دخول احترافية — لا نراها ولا نخزّنها بأي شكل قابل للقراءة.<br><br>
+            <strong>بيانات زبائن التاجر:</strong><br>
+            • رقم الهاتف — إلزامي، وهو المعرّف الوحيد للزبون وطريقة فتح بطاقته.<br>
+            • سنة الميلاد — إلزامية، تُستخدم حصراً كطبقة حماية تمنع أي شخص ثاني يعرف الرقم بس من فتح بطاقة الزبون.<br>
+            • الاسم — اختياري.<br>
+            • نشاط البطاقة — عدد الأختام، تواريخ الزيارات، والمكافآت المتحققة.<br>
+            • توكن الإشعارات (اختياري) لمن وافق على استقبال إشعار مباشر.<br><br>
+            لا نطلب من الزبون كلمة مرور، ولا بيانات بطاقة دفع، ولا موقعه الجغرافي.<br><br>
+            <strong>بيانات تقنية:</strong> سجلات تشغيل عادية (نوع الجهاز، المتصفح، وقت الطلب) للأمن وتشخيص الأعطال.
+          </div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">03 — كيف نستخدم المعلومات <span>+</span></button>
+          <div class="policy-a">
+            • إصدار بطاقة الولاء الرقمية وتحديثها.<br>
+            • تسجيل الأختام واحتساب الدرجات والمكافآت.<br>
+            • إرسال رسائل البطاقة اللي يطلبها التاجر (داخل البطاقة، إشعار مباشر، أو واتساب).<br>
+            • تزويد التاجر بتقارير وإحصائيات عن زبائنه.<br>
+            • تمكين التاجر من توجيه رسائله لفئة من زبائنه (جدد، راجعين، غابوا، عيد ميلادهم).<br>
+            • تشغيل الخدمة وتأمينها ومنع التلاعب بالنقاط.<br>
+            • الرد على استفساراتك والالتزام بما يفرضه القانون.<br><br>
+            لا نبيع بيانات التجار أو زبائنهم، ولا نؤجّرها، ولا نستخدمها لعرض إعلانات.
+          </div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">04 — أدوارنا ومسؤولية التاجر <span>+</span></button>
+          <div class="policy-a">بالنسبة لبيانات زبائن التاجر، <strong>التاجر هو صاحب البيانات والمتحكم بها</strong>، وخَتم تعالجها نيابةً عنه وبتوجيهه فقط. أما بيانات حساب التاجر نفسه فنحن المتحكمون بها.<br><br>يقع على التاجر أن يُعلم زبائنه بأنه يستخدم برنامج ولاء رقمياً، وأن يحصل على موافقتهم على جمع أرقام هواتفهم وسنة ميلادهم وإرسال رسائل إليهم.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">05 — مع من نشارك المعلومات <span>+</span></button>
+          <div class="policy-a">
+            • Google Firebase — لاستضافة قاعدة البيانات، تسجيل الدخول، وإرسال الإشعارات المباشرة.<br>
+            • مزوّد استضافة الموقع وخدمة إرسال الإشعارات الخلفية.<br>
+            • خدمة إرسال البريد الإلكتروني — لكود تفعيل حساب التاجر فقط، ما يصلها أي بيانات زبائن.<br><br>
+            قد نفصح عن معلومات إذا فرض ذلك أمر قانوني ملزم، أو لحماية حقوقنا وسلامة مستخدمينا.
+          </div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">06 — الإشعارات والرسائل <span>+</span></button>
+          <div class="policy-a">رسالة التاجر لزبونه تصله بإحدى ثلاث طرق: داخل بطاقته الرقمية (تلقائياً، بلا إذن)، إشعار مباشر على شاشة القفل (يحتاج موافقة صريحة أول مرة)، أو واتساب (رابط يفتحه التاجر يدوياً).<br><br>محتوى الرسالة يكتبه التاجر وهو مسؤول عنه. يستطيع الزبون إيقاف الإشعارات المباشرة من إعدادات متصفحه بأي وقت.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">07 — ملفات تعريف الارتباط والتخزين المحلي <span>+</span></button>
+          <div class="policy-a">لا يستخدم موقعنا ملفات تعريف ارتباط إعلانية أو تتبّعية. نستخدم التخزين المحلي بمتصفحك لحفظ جلسة دخولك (تاجر أو زبون) عشان ما تحتاج تسجل دخولك من جديد كل مرة — ولا يمكن تعطيله مع بقاء الخدمة صالحة للعمل.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">08 — مدة الاحتفاظ بالبيانات <span>+</span></button>
+          <div class="policy-a">نحتفظ ببيانات زبائن التاجر ما دام اشتراكه فعّالاً. لو أوقف حسابه، بياناته تبقى محفوظة لمدة معقولة يقدر خلالها يصدّرها أو يستأنف اشتراكه، ثم تُحذف نهائياً بطلب منه أو بعد فترة توقف طويلة. يستطيع التاجر طلب الحذف الفوري بأي وقت.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">09 — أمن المعلومات <span>+</span></button>
+          <div class="policy-a">ننقل البيانات عبر اتصال مشفّر بالكامل (HTTPS)، ونحمي وصول التاجر بكلمة مرور مشفّرة، ونحمي رابط ماسح الموظفين بنفس بيانات دخول صاحب المحل، ونحمي بطاقة كل زبون برمز حماية (سنة الميلاد).<br><br>ومع ذلك، لا توجد وسيلة نقل أو تخزين آمنة بنسبة مئة بالمئة. إن علمنا بحادثة تمسّ بيانات زبائن تاجر، نُعلمه بها دون تأخير غير مبرر.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">10 — حقوقك وحقوق زبائنك <span>+</span></button>
+          <div class="policy-a">بصفتك تاجراً تستطيع أن تطلب الاطلاع على بياناتك أو تصحيحها أو تصدير بيانات زبائنك أو حذف حسابك.<br><br>أما زبونك فيتوجه إليك أولاً لأنك صاحب البيانات. نستجيب لطلبات الحقوق خلال مدة معقولة لا تتجاوز ثلاثين يوماً عادةً.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">11 — خصوصية الأطفال <span>+</span></button>
+          <div class="policy-a">الخدمة موجّهة للتجار وزبائنهم البالغين. لا نجمع عن قصد بيانات من هم دون الثالثة عشرة، وإن علمنا بجمع بيانات كهذه حذفناها.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">12 — نقل البيانات ومعالجتها دولياً <span>+</span></button>
+          <div class="policy-a">قد تُخزَّن البيانات أو تُعالَج على خوادم مزوّدي خدمتنا في دول أخرى. نتعامل بهذه الحالات مع مزوّدين يلتزمون بمعايير حماية مناسبة.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">13 — تغييرات على هذه السياسة <span>+</span></button>
+          <div class="policy-a">قد نحدّث هذه السياسة كلما تغيّرت الخدمة أو المتطلبات القانونية. ننشر النسخة الجديدة على هذه الصفحة، ونُعلم التجار بالتغييرات الجوهرية عبر بريدهم المسجّل.</div>
+        </div>
+        <div class="policy-item">
+          <button class="policy-q" onclick="toggleFaq(this)">14 — كيف تتواصل معنا <span>+</span></button>
+          <div class="policy-a">لأي استفسار عن هذه السياسة أو بياناتك، تواصل معنا عبر واتساب من رابط "تواصل معنا" الموجود بلوحتك، أو من زر التواصل بالصفحة الرئيسية.</div>
         </div>
       </div>
     </div>
