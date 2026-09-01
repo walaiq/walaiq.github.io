@@ -1295,6 +1295,7 @@ let currentTab = 'merchant';
 function switchTab(which){
   restoreHomeNav();
   if(which !== 'customer' && _customerCardUnsub){ try{ _customerCardUnsub(); }catch(e){} _customerCardUnsub = null; }
+  if(which !== 'customer' && _bizNoticesUnsub){ try{ _bizNoticesUnsub(); }catch(e){} _bizNoticesUnsub = null; }
   currentTab = which;
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
     b.classList.toggle('active', ['merchant','customer','admin'][i]===which);
@@ -2787,6 +2788,7 @@ async function submitJoin(bizId){
 
 async function backFromCustomerCard(){
   if(_customerCardUnsub){ try{ _customerCardUnsub(); }catch(e){} _customerCardUnsub = null; }
+  if(_bizNoticesUnsub){ try{ _bizNoticesUnsub(); }catch(e){} _bizNoticesUnsub = null; }
   const savedBizId = loadBizSessionId();
   if(savedBizId){
     const biz = await getBusiness(savedBizId);
@@ -2825,7 +2827,7 @@ async function showCustomerCard(bizId, cust){
       <div id="liveCardArea">${cardPreviewHTMLPublic(biz, cust, lastSeen)}</div>
       <p class="center-note">أضف هذي الصفحة لشاشتك الرئيسية لفتحها بسرعة أي وقت (⋮ ← إضافة إلى الشاشة الرئيسية)</p>
     </div>
-    ${noticesHTML}
+    <div id="noticesWrap">${noticesHTML}</div>
     <div class="card" style="text-align:center;">
       <div class="eyebrow">أرِ هذا للموظف عند كل زيارة</div>
       <h3>رمزك الشخصي</h3>
@@ -2836,10 +2838,23 @@ async function showCustomerCard(bizId, cust){
   setLastSeenStamps(bizId, cust.phone, cust.points || 0);
   renderPersonalQr('custPersonalQr', bizId, cust.phone);
   watchCustomerCardLive(bizId, biz, cust);
+  watchBizNoticesLive(bizId);
   saveCustomerSession(bizId, cust.phone);
   maybeAskPushPermission(bizId, cust.phone);
   // نثبّت الرابط بشكل يرجّعه لبطاقته بالضبط لو سوّى رفرش، بدل ما يرجع للصفحة الرئيسية
   try{ window.history.replaceState({}, document.title, window.location.pathname + '?biz=' + encodeURIComponent(bizId) + '&mode=join'); }catch(e){}
+}
+
+/* -------- تحديث "آخر أخبار المحل" بالبطاقة تلقائياً لحظة ما التاجر يرسل رسالة جديدة (بدون رفرش) -------- */
+let _bizNoticesUnsub = null;
+function watchBizNoticesLive(bizId){
+  if(_bizNoticesUnsub){ try{ _bizNoticesUnsub(); }catch(e){} _bizNoticesUnsub = null; }
+  if(!_db) return;
+  _bizNoticesUnsub = _db.collection('businesses').doc(bizId).onSnapshot(async () => {
+    const wrap = document.getElementById('noticesWrap');
+    if(!wrap) return; // المستخدم طلع من هالصفحة
+    wrap.innerHTML = await recentNoticesHTML(bizId);
+  }, (err) => { console.error('watchBizNoticesLive failed', err); });
 }
 
 /* ================= إشعارات Push حقيقية (FCM) ================= */
@@ -2896,9 +2911,9 @@ async function recentNoticesHTML(bizId){
   const biz = await getBusiness(bizId);
   const broadcasts = (biz && biz.broadcasts) || [];
   if(broadcasts.length === 0) return '';
-  const recent = broadcasts.slice(-3).reverse();
+  const recent = broadcasts.slice(-10).reverse();
   return `
-    <div class="card" style="background:linear-gradient(135deg, var(--sky-light), var(--surface));">
+    <div class="card" id="noticesCard" style="background:linear-gradient(135deg, var(--sky-light), var(--surface));">
       <div class="eyebrow">📣 آخر أخبار المحل</div>
       <div>${recent.map(b => `
         <div style="padding:10px 0; border-bottom:1px solid var(--border);">
