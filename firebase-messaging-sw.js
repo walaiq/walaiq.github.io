@@ -17,6 +17,9 @@ messaging.onBackgroundMessage((payload) => {
   const title = (payload.notification && payload.notification.title) || 'خَتم';
   const options = {
     body: (payload.notification && payload.notification.body) || '',
+    icon: '/icon-192.png',
+    badge: '/badge-72.png',
+    vibrate: [200, 100, 200, 100, 300],
     dir: 'rtl'
   };
   self.registration.showNotification(title, options);
