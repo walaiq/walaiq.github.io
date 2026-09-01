@@ -816,7 +816,7 @@
       <button class="lp-btn lp-btn-primary" onclick="goToApp('register')">ابدأ تجربتك المجانية</button>
     </div>
 
-    ${devsFooterHTML()}
+    <div id="landingDevsFooter"></div>
   </div>
 
   <div class="tabs hidden" id="mainTabs">
@@ -1413,6 +1413,8 @@ function showLandingPage(){
   const waBtn = document.getElementById('lpWaFloat');
   waBtn.href = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، عندي استفسار بخصوص منصة ختم')}`;
   waBtn.classList.remove('hidden');
+  const devsFooterEl = document.getElementById('landingDevsFooter');
+  if(devsFooterEl) devsFooterEl.innerHTML = devsFooterHTML();
   loadLandingExtras();
 }
 
