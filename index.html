@@ -2855,6 +2855,7 @@ async function addStamp(phone){
   cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(currentBiz.id, phone, cust);
   await logVisit(currentBiz.id, cust, rewardEarned);
+  await creditReferralIfDue(currentBiz.id, cust);
   renderMerchantDashboard();
 }
 
@@ -3115,17 +3116,26 @@ async function submitJoin(bizId){
   const refPhone = window._joinRefPhone;
   if(refPhone && refPhone !== phone){
     const referrer = await getCustomer(bizId, refPhone);
-    if(referrer){
-      cust.referredBy = refPhone;
-      await creditReferralStamp(bizId, refPhone);
-    }
+    // نسجّل مين دعاه بس ما نعطي الختم الآن — الختم يُعطى فقط لما صديقه يحصل على أول ختم فعلي (زيارة حقيقية)
+    if(referrer) cust.referredBy = refPhone;
   }
   await saveCustomer(bizId, phone, cust);
   toast('أهلاً بك! تم إنشاء بطاقتك 🎉');
   await showCustomerCard(bizId, cust);
 }
 
-/* -------- نظام الإحالة: نضيف ختم للزبون اللي دعا صديقه أول ما الصديق يسجّل بطاقته -------- */
+/* -------- نظام الإحالة: نضيف ختم للزبون اللي دعا صديقه، بس فقط أول ما الصديق يحصل على أول ختم حقيقي له (مو مجرد فتح حساب) -------- */
+async function creditReferralIfDue(bizId, cust){
+  try{
+    if(!cust || !cust.referredBy || cust.referralCredited) return;
+    // "أول ختم حقيقي" يعني هذا الختم خلّى نقاطه تتحول من صفر إلى 1
+    if((cust.points||0) !== 1) return;
+    await creditReferralStamp(bizId, cust.referredBy);
+    cust.referralCredited = true;
+    await saveCustomer(bizId, cust.phone, cust);
+  }catch(e){ console.error('creditReferralIfDue failed', e); }
+}
+
 async function creditReferralStamp(bizId, referrerPhone){
   try{
     const referrer = await getCustomer(bizId, referrerPhone);
@@ -3274,8 +3284,9 @@ function watchCustomerCardLive(bizId, biz, cust){
 async function recentNoticesHTML(bizId){
   const biz = await getBusiness(bizId);
   const broadcasts = (biz && biz.broadcasts) || [];
-  if(broadcasts.length === 0) return '';
-  const recent = broadcasts.slice(-10).reverse();
+  const cutoff = Date.now() - 24*60*60*1000; // الرسائل تختفي من بطاقة الزبون بعد 24 ساعة من إرسالها
+  const recent = broadcasts.filter(b => new Date(b.time).getTime() >= cutoff).slice(-10).reverse();
+  if(recent.length === 0) return '';
   return `
     <div class="card" id="noticesCard" style="background:linear-gradient(135deg, var(--sky-light), var(--surface));">
       <div class="eyebrow">📣 آخر أخبار المحل</div>
@@ -3781,6 +3792,7 @@ async function staffAddStamp(bizId){
   cust.totalVisits = (cust.totalVisits || 0) + 1;
   await saveCustomer(bizId, phone, cust);
   await logVisit(bizId, cust, rewardEarned);
+  await creditReferralIfDue(bizId, cust);
   const staffSession = window._currentStaffSession || null;
   await addStaffStampLog(bizId, {
     staffId: staffSession ? staffSession.id : null,
@@ -4507,6 +4519,17 @@ async function toggleSubscription(bizId){
 }
 
 init();
+
+// تسجيل Service Worker عام من أول ما تفتح الصفحة (مو بس وقت طلب إذن الإشعارات) —
+// هذا شرط أساسي عند أغلب المتصفحات (خصوصاً كروم/أندرويد) عشان يفعّل خيار
+// "تثبيت التطبيق / إضافة إلى الشاشة الرئيسية" (PWA) تلقائياً
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((e) => {
+      console.warn('PWA service worker registration failed', e);
+    });
+  });
+}
 </script>
 </body>
 </html>
