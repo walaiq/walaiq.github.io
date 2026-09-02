@@ -52,9 +52,14 @@
   const EMAILJS_PUBLIC_KEY = 'crrbsuPw5ne94f5C9';
   const EMAILJS_SERVICE_ID = 'service_wjbynxj';
   const EMAILJS_TEMPLATE_ID = 'template_a11ckwp';
+  // 🔴 [اختياري] لتفعيل تنبيهات بريد فورية للإدارة عند فعل حسّاس (زي حذف حساب) —
+  // سوّي Template ثاني منفصل على emailjs.com فيه متغيرات {{to_email}} و {{subject}} و {{message}} بس،
+  // وحط معرّفه هنا. لو خليتها فاضية، التنبيه ينفعّل بس داخل "سجل نشاط الإدارة" (بدون بريد).
+  const EMAILJS_ADMIN_ALERT_TEMPLATE_ID = 'template_tso24dr';
   window._EMAILJS_READY = (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY');
   window._EMAILJS_SERVICE_ID = EMAILJS_SERVICE_ID;
   window._EMAILJS_TEMPLATE_ID = EMAILJS_TEMPLATE_ID;
+  window._EMAILJS_ADMIN_ALERT_TEMPLATE_ID = EMAILJS_ADMIN_ALERT_TEMPLATE_ID;
   try{
     if(window.emailjs && window._EMAILJS_READY){ emailjs.init(EMAILJS_PUBLIC_KEY); }
   }catch(e){ console.error('EmailJS init failed', e); }
@@ -113,6 +118,8 @@
 
   .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:15px 20px; border-radius:16px; font-weight:800; font-size:14.5px; width:100%; transition:.18s; letter-spacing:.2px;}
   .btn-primary{background:linear-gradient(135deg, var(--primary), var(--primary-dark)); color:#fff; box-shadow:0 6px 16px -6px rgba(10,74,55,.5);}
+  .btn-whatsapp{background:#25D366; color:#fff; box-shadow:0 6px 16px -6px rgba(37,211,102,.55);}
+  .btn-whatsapp:active{background:#1EBE5A;}
   .btn-primary:active{transform:scale(.97); box-shadow:0 2px 8px -4px rgba(10,74,55,.5);}
   .btn-accent{background:var(--accent); color:#221806;}
   .btn-ghost{background:transparent; color:var(--primary); border:1.5px solid var(--border);}
@@ -1797,6 +1804,20 @@ async function logAdminActivity(action, details, actorEmailOverride){
   }catch(e){ /* تسجيل النشاط ثانوي، ما نوقف العملية لو فشل */ }
 }
 
+/* -------- تنبيه بريد فوري للإدارة عند فعل حسّاس (اختياري، يحتاج Template ثاني بـEmailJS) -------- */
+async function notifyAdminCritical(subject, message){
+  if(!(window.emailjs && window._EMAILJS_READY && window._EMAILJS_ADMIN_ALERT_TEMPLATE_ID)) return;
+  try{
+    for(const email of ADMIN_EMAILS){
+      await emailjs.send(window._EMAILJS_SERVICE_ID, window._EMAILJS_ADMIN_ALERT_TEMPLATE_ID, {
+        to_email: email,
+        subject: subject,
+        message: message
+      });
+    }
+  }catch(e){ console.error('notifyAdminCritical failed', e); /* التنبيه ثانوي — الأثر الأساسي محفوظ بسجل نشاط الإدارة دائماً */ }
+}
+
 function normalizePhone(raw){
   return raw.trim().replace(/[^0-9]/g,'');
 }
@@ -2391,7 +2412,7 @@ async function renderMerchantDashboard(){
     </div>
 
     <div class="card">
-      <h3>${catIcon(currentBiz.category)} رمز QR الخاص بـ${catLabel(currentBiz.category)}</h3>
+      <h3>${catIcon(currentBiz.category)} رمز QR الخاص بـ${escapeHTML(currentBiz.name)}</h3>
       <div class="qr-wrap" id="joinQr"></div>
       <button class="btn btn-primary" style="margin-top:12px;" onclick="printJoinPoster()">🖨️ طباعة الباركود</button>
     </div>
@@ -2454,7 +2475,7 @@ async function renderMerchantDashboard(){
 
     <div class="card">
       <h3>👥 الزبائن (${customers.length})</h3>
-      ${isPaidBiz(currentBiz) ? `<input type="text" id="custSearchInput" placeholder="🔍 دوّر بالاسم أو رقم الجوال..." oninput="filterCustomerList()" style="margin-bottom:10px;">` : `<div class="note" style="margin-bottom:10px;">🔒 البحث بالاسم أو رقم الجوال ميزة حصرية للمشتركين فقط — الأرقام تظهر مموّهة بالفترة التجريبية، فما نتيح البحث حتى ما يصير فيه طريقة لتخمين رقم كامل.</div>`}
+      ${isPaidBiz(currentBiz) ? `<input type="text" id="custSearchInput" placeholder="🔍 دوّر بالاسم أو رقم الجوال..." oninput="filterCustomerList()" style="margin-bottom:10px;">` : `<div class="note" style="margin-bottom:10px;">🔒 البحث خدمة للمشتركين فقط</div>`}
       <div id="custListArea">${renderCustomerListHTML(customers)}</div>
     </div>
 
@@ -2507,7 +2528,7 @@ async function renderMerchantDashboard(){
         "خَتم" منصة بطاقات ولاء رقمية لأي نشاط تجاري — مطاعم، مقاهي، صالونات، عيادات، ومتاجر. هدفنا نخليك تكافئ زبائنك بسهولة وتخليهم يرجعون لك أكثر، من دون تعقيد التطبيقات التقليدية: بطاقة رقمية بسيطة، رابط QR للانضمام، وتواصل مباشر مع زبائنك.<br>
         <strong>كل زبون عندك يعني فرد من العائلة 🤍</strong>
       </p>
-      <a class="btn btn-primary" style="text-decoration:none;" href="https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، عندي استفسار بخصوص منصة ختم')}" target="_blank" rel="noopener">💬 تواصل معنا عبر واتساب</a>
+      <a class="btn btn-whatsapp" style="text-decoration:none;" href="https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، عندي استفسار بخصوص منصة ختم')}" target="_blank" rel="noopener">💬 تواصل معنا عبر واتساب</a>
     </div>
 
     ${devsFooterHTML()}
@@ -3245,7 +3266,7 @@ async function showCustomerCard(bizId, cust){
       <div class="eyebrow">🎁 ادعُ صديق</div>
       <h3>احصل على ختم إضافي مقابل كل دعوة</h3>
       <p class="center-note">شارك رابطك الشخصي — أول ما صديقك يسجّل بطاقته عبره، تنضاف لك ختم فورًا 🎉</p>
-      <a class="btn btn-primary" style="text-decoration:none; display:block; margin-top:10px;" href="https://wa.me/?text=${encodeURIComponent(`جرّب بطاقة الولاء الرقمية لـ ${biz.name}! سجّل من هذا الرابط: ${baseUrl()}?biz=${bizId}&mode=join&ref=${cust.phone}`)}" target="_blank" rel="noopener">📤 شارك عبر واتساب</a>
+      <a class="btn btn-whatsapp" style="text-decoration:none; display:block; margin-top:10px;" href="https://wa.me/?text=${encodeURIComponent(`جرّب بطاقة الولاء الرقمية لـ ${biz.name}! سجّل من هذا الرابط: ${baseUrl()}?biz=${bizId}&mode=join&ref=${cust.phone}`)}" target="_blank" rel="noopener">📤 شارك عبر واتساب</a>
       <div class="link-box" style="margin-top:10px;"><input type="text" readonly value="${baseUrl()}?biz=${bizId}&mode=join&ref=${cust.phone}" id="referralLinkInput" onclick="this.select()" onfocus="this.select()"><button class="icon-btn" onclick="copyText(document.getElementById('referralLinkInput').value, document.getElementById('referralLinkInput'))">📋</button></div>
     </div>
     <div class="card" style="text-align:center;">
@@ -4047,7 +4068,11 @@ async function renderStaffStats(){
 }
 
 /* ================= ADMIN ================= */
-const ADMIN_EMAIL = 'hadihussien9@gmail.com'; // البريد الوحيد المصرّح له بدخول لوحة الإدارة
+// قائمة البريد الإلكتروني المصرّح لها بدخول لوحة الإدارة — تقدر تضيف أكثر من بريد هنا.
+// ⚠️ مهم جداً: لازم تحدّث Firestore Security Rules عندك بنفس هذي القائمة أيضاً،
+// وإلا أي بريد تضيفه هنا بس بالواجهة بيقدر "يدخل" الشاشة، بس عملياته (حذف/تعديل/تفعيل)
+// بترفض من قاعدة البيانات لأن القواعد الحقيقية لسا تعرف بريد واحد بس
+const ADMIN_EMAILS = ['hadihussien9@gmail.com'];
 let adminAuthed = false;
 function renderAdminLogin(){
   if(adminAuthed){ renderAdminPanel(); return; }
@@ -4072,7 +4097,7 @@ async function adminLogin(){
   if(!pass){ toast('اكتب كلمة المرور'); return; }
   if(!_auth){ toast('تعذّر الاتصال بخدمة الحسابات، جرب لاحقاً'); return; }
 
-  if(email !== ADMIN_EMAIL){
+  if(!ADMIN_EMAILS.includes(email)){
     toast('هذا البريد ما عنده صلاحية دخول الإدارة');
     return;
   }
@@ -4101,7 +4126,17 @@ function adminLogout(){
 
 async function renderAdminPanel(){
   const businesses = await listBusinesses();
+  window._adminBizCache = businesses;
   let activeCount = businesses.filter(b=>b.subscriptionStatus==='active').length;
+  const estimatedMRR = activeCount * 15000;
+
+  // الحسابات التجريبية اللي باقي لها 3 أيام أو أقل — عشان تتواصل وياهم قبل ما تخسرهم
+  const now = new Date();
+  const expiringSoon = businesses.filter(b => {
+    if(b.subscriptionStatus !== 'trial' || !b.subscriptionUntil) return false;
+    const daysLeft = Math.ceil((new Date(b.subscriptionUntil) - now) / (1000*60*60*24));
+    return daysLeft <= 3 && daysLeft >= 0;
+  }).sort((a,b) => new Date(a.subscriptionUntil) - new Date(b.subscriptionUntil));
 
   document.getElementById('adminView').innerHTML = `
     <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -4114,6 +4149,26 @@ async function renderAdminPanel(){
       <div class="stat-box tone-sky"><div class="num">${businesses.length}</div><div class="lbl">عمل مسجّل</div></div>
       <div class="stat-box tone-family"><div class="num">${activeCount}</div><div class="lbl">اشتراك فعّال</div></div>
     </div>
+    <div class="stat-row">
+      <div class="stat-box tone-accent" style="flex:1;"><div class="num">${estimatedMRR.toLocaleString('en-US')} د.ع</div><div class="lbl">💰 تقدير الإيراد الشهري (عدد الفعّالين × 15,000)</div></div>
+    </div>
+
+    ${expiringSoon.length > 0 ? `
+    <div class="card" style="background:linear-gradient(135deg, #FFF3E0, var(--surface)); border:1.5px solid #F5B942;">
+      <div class="eyebrow" style="color:#B8860B;">⏰ تنتبه — تجارب قربت تنتهي</div>
+      <h3>${expiringSoon.length} حساب تجريبي باقي له 3 أيام أو أقل</h3>
+      ${expiringSoon.map(b => {
+        const daysLeft = Math.ceil((new Date(b.subscriptionUntil) - now) / (1000*60*60*24));
+        const msg = encodeURIComponent(`مرحباً ${b.name}، فترتك التجريبية بمنصة ختم ${daysLeft<=0?'انتهت':'باقي لها '+daysLeft+' يوم'} — تحب نفعّل اشتراكك المدفوع عشان ما تنقطع خدمتك؟`);
+        return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+          <span><strong>${escapeHTML(b.name)}</strong> — باقي ${daysLeft} ${daysLeft===1?'يوم':'أيام'}</span>
+          <a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}?text=${msg}" target="_blank" rel="noopener" class="link-btn btn-whatsapp" style="padding:6px 12px; border-radius:10px; text-decoration:none; font-size:12px;">⏰ ذكّره بالتجديد</a>
+        </div>`;
+      }).join('')}
+    </div>
+    ` : ''}
+
     <div class="card" style="display:flex; flex-direction:column; gap:10px;">
       <button class="btn btn-accent" onclick="renderAdminAddBusiness()">➕ إضافة صاحب عمل جديد</button>
       <button class="btn btn-ghost" onclick="renderAdminActivityLog()">📜 سجل التغييرات</button>
@@ -4122,12 +4177,64 @@ async function renderAdminPanel(){
       <button class="btn btn-ghost" onclick="renderAdminTestimonials()">💬 آراء العملاء (الصفحة الرئيسية)</button>
     </div>
     <div class="card">
-      <h3>🏢 كل الحسابات</h3>
-      <div>${renderBizListHTML(businesses)}</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="margin:0;">🏢 كل الحسابات (${businesses.length})</h3>
+        <button class="link-btn" onclick="adminExportBusinessesCSV()">📊 تصدير Excel</button>
+      </div>
+      <input type="text" id="adminBizSearchInput" placeholder="🔍 دوّر بالاسم أو الرقم أو البريد..." oninput="filterAdminBizList()" style="margin-top:10px;">
+      <div class="segment-choice" id="adminBizStatusFilter" style="margin-top:10px;">
+        <button type="button" class="seg-pill active" data-status="all" onclick="setAdminBizStatusFilter('all')">الكل</button>
+        <button type="button" class="seg-pill" data-status="trial" onclick="setAdminBizStatusFilter('trial')">تجريبي</button>
+        <button type="button" class="seg-pill" data-status="active" onclick="setAdminBizStatusFilter('active')">فعّال</button>
+        <button type="button" class="seg-pill" data-status="inactive" onclick="setAdminBizStatusFilter('inactive')">متوقف</button>
+      </div>
+      <div id="adminBizListArea" style="margin-top:6px;">${renderBizListHTML(businesses)}</div>
     </div>
 
     ${devsFooterHTML()}
   `;
+}
+
+window._adminBizStatusFilter = 'all';
+function setAdminBizStatusFilter(status){
+  window._adminBizStatusFilter = status;
+  document.querySelectorAll('#adminBizStatusFilter .seg-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+  });
+  filterAdminBizList();
+}
+
+function filterAdminBizList(){
+  const q = (document.getElementById('adminBizSearchInput').value || '').trim().toLowerCase();
+  const status = window._adminBizStatusFilter || 'all';
+  const all = window._adminBizCache || [];
+  const filtered = all.filter(b => {
+    const matchesQuery = !q || (b.name||'').toLowerCase().includes(q) || (b.id||'').includes(q) || (b.email||'').toLowerCase().includes(q);
+    const matchesStatus = status === 'all' || b.subscriptionStatus === status;
+    return matchesQuery && matchesStatus;
+  });
+  document.getElementById('adminBizListArea').innerHTML = renderBizListHTML(filtered);
+}
+
+async function adminExportBusinessesCSV(){
+  const businesses = window._adminBizCache || await listBusinesses();
+  if(!businesses.length){ toast('ما فيه حسابات للتصدير'); return; }
+  const headers = ['اسم المحل', 'المعرّف/الهاتف', 'البريد الإلكتروني', 'المدينة', 'التصنيف', 'حالة الاشتراك', 'ينتهي الاشتراك', 'تاريخ الانضمام'];
+  const rows = businesses.map(b => [
+    b.name || '', b.id || '', b.email || '', b.city || '', catLabel(b.category) || '',
+    b.subscriptionStatus === 'active' ? 'فعّال' : (b.subscriptionStatus === 'trial' ? 'تجريبي' : 'متوقف'),
+    b.subscriptionUntil ? new Date(b.subscriptionUntil).toLocaleDateString('ar') : '',
+    b.createdAt ? new Date(b.createdAt).toLocaleDateString('ar') : ''
+  ]);
+  const lines = [headers, ...rows].map(row => row.map(csvEscape).join(','));
+  const csvContent = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'حسابات-ختم-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('تم تصدير قائمة الحسابات 📊');
 }
 
 /* ================= ADMIN: activity log ================= */
@@ -4441,6 +4548,8 @@ function renderBizListHTML(businesses){
     const badge = b.subscriptionStatus==='active'
       ? `<span class="status-pill status-active">فعّال</span>`
       : `<span class="status-pill status-inactive">${b.subscriptionStatus==='trial'?'تجريبي':'متوقف'}</span>`;
+    const isTrial = b.subscriptionStatus === 'trial';
+    const renewMsg = encodeURIComponent(`مرحباً ${b.name}، تحب نفعّل اشتراكك المدفوع بمنصة ختم عشان ما تنقطع خدمتك؟`);
     return `
       <div class="biz-item" style="flex-wrap:wrap;">
         <div>
@@ -4449,16 +4558,43 @@ function renderBizListHTML(businesses){
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           ${badge}
-          <div style="display:flex; gap:10px; align-items:center;">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
             <a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}" target="_blank" rel="noopener" class="link-btn" style="color:#25D366;" title="راسله بالواتساب">💬 واتساب</a>
+            ${isTrial ? `<a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}?text=${renewMsg}" target="_blank" rel="noopener" class="link-btn" style="color:#B8860B;" title="ذكّره بالتجديد">⏰ ذكّره</a>` : ''}
+            <button class="link-btn" onclick="toggleAdminQuickStats('${b.id}')">👁️ لمحة سريعة</button>
             <button class="link-btn" onclick="toggleSubscription('${b.id}')">${b.subscriptionStatus==='active'?'إيقاف':'تفعيل'}</button>
             <button class="link-btn" onclick="adminEditBusiness('${b.id}')">تعديل</button>
             <button class="link-btn" style="color:var(--danger);" onclick="adminDeleteBusiness('${b.id}')">حذف</button>
           </div>
         </div>
+        <div id="admQuick-${b.id}" style="width:100%; display:none;"></div>
       </div>
     `;
   }).join('');
+}
+
+async function toggleAdminQuickStats(bizId){
+  const el = document.getElementById('admQuick-'+bizId);
+  if(!el) return;
+  if(el.style.display === 'block'){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="note" style="margin-top:8px;">جاري التحميل...</div>`;
+  try{
+    const {list:custList} = await loadAllCustomers(bizId);
+    const totalStamps = custList.reduce((s,c) => s + (c.points||0), 0);
+    const lastVisitTimes = custList.map(c => c.lastVisitAt ? new Date(c.lastVisitAt).getTime() : 0).filter(t => t>0);
+    const lastActivity = lastVisitTimes.length ? new Date(Math.max(...lastVisitTimes)).toLocaleDateString('ar') : '—';
+    el.innerHTML = `
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <div class="stat-box tone-family" style="flex:1; min-width:90px;"><div class="num" style="font-size:18px;">${custList.length}</div><div class="lbl" style="font-size:10.5px;">زبون</div></div>
+        <div class="stat-box tone-accent" style="flex:1; min-width:90px;"><div class="num" style="font-size:18px;">${totalStamps}</div><div class="lbl" style="font-size:10.5px;">ختم إجمالي</div></div>
+        <div class="stat-box tone-sky" style="flex:1; min-width:90px;"><div class="num" style="font-size:13px;">${lastActivity}</div><div class="lbl" style="font-size:10.5px;">آخر نشاط</div></div>
+      </div>
+    `;
+  }catch(e){
+    console.error('toggleAdminQuickStats failed', e);
+    el.innerHTML = `<div class="note" style="margin-top:8px; color:var(--danger);">تعذّر تحميل الإحصائية</div>`;
+  }
 }
 
 async function adminEditBusiness(bizId){
@@ -4544,7 +4680,12 @@ async function adminDeleteBusiness(bizId){
       const bizToDelete = await getBusiness(bizId);
       if(bizToDelete && bizToDelete.email){ await deleteEmailIndex(bizToDelete.email); }
       await deleteBusinessDoc(bizId);
+      const actorEmail = (_auth && _auth.currentUser && _auth.currentUser.email) || 'غير معروف';
       await logAdminActivity('حذف حساب صاحب عمل نهائياً', `${(bizToDelete&&bizToDelete.name)||''} (${bizId})`);
+      await notifyAdminCritical(
+        '🗑️ تم حذف حساب بمنصة ختم',
+        `قام ${actorEmail} بحذف حساب "${(bizToDelete&&bizToDelete.name)||''}" (${bizId}) نهائياً في ${new Date().toLocaleString('ar')}.`
+      );
 
       if(currentBiz && currentBiz.id===bizId){ currentBiz = null; }
       toast('تم حذف الحساب');
