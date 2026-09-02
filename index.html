@@ -3286,18 +3286,23 @@ async function searchMyCards(){
 // ننتظر فايربيس يتأكد فعلياً من حالة تسجيل الدخول (بعد الرفرش يضل فاضي لجزء من الثانية) —
 // نستخدمها بس بالأماكن اللي تتحقق من الدخول مباشرة، عشان ما نعلّق باقي الصفحة بلا داعي
 let _authReadyPromise = null;
+let _authInitialized = false;
 function waitForAuthReady(){
+  // بعد أول تحقق، لازم نرجع حالة الدخول الحيّة كل مرة (مو نتيجة محفوظة من البداية) —
+  // وإلا أي تسجيل دخول جديد (زي دخول الموظف) ما راح ينعكس ويرجعنا لصفحة الدخول فاضية بصمت
+  if(_authInitialized) return Promise.resolve(_auth ? _auth.currentUser : null);
   if(_authReadyPromise) return _authReadyPromise;
   _authReadyPromise = new Promise((resolve) => {
-    if(!_auth){ resolve(null); return; }
+    if(!_auth){ _authInitialized = true; resolve(null); return; }
     let done = false;
     const unsub = _auth.onAuthStateChanged((user) => {
       if(done) return;
       done = true;
+      _authInitialized = true;
       try{ unsub(); }catch(e){}
       resolve(user);
     });
-    setTimeout(() => { if(!done){ done = true; resolve(_auth.currentUser); } }, 3000); // احتياط لو تأخر كثير
+    setTimeout(() => { if(!done){ done = true; _authInitialized = true; resolve(_auth.currentUser); } }, 3000); // احتياط لو تأخر كثير
   });
   return _authReadyPromise;
 }
