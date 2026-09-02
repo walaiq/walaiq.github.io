@@ -198,6 +198,26 @@
   .link-box input{flex:1; border:none; background:transparent; font-size:12px; direction:ltr; text-align:left; padding:0; color:var(--muted);}
   .link-box input:focus{outline:none;}
   .qr-wrap{display:flex; justify-content:center; margin:14px 0; background:#fff; padding:14px; border-radius:12px;}
+
+  #printPoster{display:none;}
+  @media print{
+    @page{ margin:14mm; }
+    body *{ visibility:hidden; }
+    #printPoster, #printPoster *{ visibility:visible; }
+    #printPoster{
+      display:block; position:fixed; inset:0; margin:0; padding:0;
+      background:#fff; direction:rtl;
+    }
+    .pp-inner{ max-width:520px; margin:30px auto 0; text-align:center; }
+    .pp-brand{ font-family:'Cairo',sans-serif; font-weight:900; font-size:34px; color:#13182B; margin-bottom:6px; }
+    .pp-title{ font-family:'Cairo',sans-serif; font-weight:700; font-size:19px; color:#6C5CE7; margin-bottom:22px; }
+    .pp-qr{ display:flex; justify-content:center; margin:0 0 26px; }
+    .pp-steps{ text-align:right; margin:0 auto 22px; max-width:420px; }
+    .pp-step{ display:flex; align-items:flex-start; gap:10px; font-size:14.5px; line-height:1.8; margin-bottom:10px; color:#13182B; }
+    .pp-step span{ flex-shrink:0; width:22px; height:22px; border-radius:50%; background:#161B33; color:#fff; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+    .pp-reward{ font-family:'Cairo',sans-serif; font-weight:800; font-size:16.5px; color:#161B33; background:#ECE8FE; border-radius:12px; padding:12px 16px; margin:0 auto 18px; max-width:420px; }
+    .pp-link{ font-size:11.5px; color:#6B7280; direction:ltr; margin-top:6px; word-break:break-all; }
+  }
   .segment-choice{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
   .seg-pill{padding:9px 14px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface); font-size:12.5px; font-weight:700; color:var(--muted);}
   .seg-pill.active{background:var(--primary); color:#fff; border-color:var(--primary);}
@@ -2182,6 +2202,7 @@ async function renderMerchantDashboard(){
 
   const joinLink = baseUrl()+'?biz='+encodeURIComponent(currentBiz.id)+'&mode=join';
   const scanLink = baseUrl()+'?biz='+encodeURIComponent(currentBiz.id)+'&mode=scan';
+  window._joinPosterData = { link: joinLink, name: currentBiz.name, reward: currentBiz.rewardText, threshold: currentBiz.threshold };
 
   document.getElementById('merchantView').innerHTML = `
     <div class="card">
@@ -2222,6 +2243,7 @@ async function renderMerchantDashboard(){
       <p style="font-size:13px; color:var(--muted); line-height:1.7;">اطبع رمز الـQR هذا وحطه بعملك — الزبون يصوره بكاميرا جواله عادي وتفتح له بطاقته مباشرة، بدون تنزيل تطبيق.</p>
       <div class="qr-wrap" id="joinQr"></div>
       <div class="link-box"><input type="text" readonly value="${joinLink}" id="joinLinkInput" onclick="this.select()" onfocus="this.select()"><button class="icon-btn" onclick="copyText(document.getElementById('joinLinkInput').value, document.getElementById('joinLinkInput'))">📋</button></div>
+      <button class="btn btn-primary" style="margin-top:12px;" onclick="printJoinPoster()">🖨️ طباعة ملصق جاهز (اسم المكان + تعليمات الاستخدام)</button>
     </div>
 
     <div class="card">
@@ -2334,6 +2356,37 @@ async function renderMerchantDashboard(){
     qrWrap.innerHTML = '';
     new QRCode(qrWrap, { text: joinLink, width:170, height:170, colorDark:'#1B2420', colorLight:'#ffffff' });
   }
+}
+
+function printJoinPoster(){
+  const data = window._joinPosterData;
+  if(!data){ toast('حمّل الصفحة من جديد وحاول مرة ثانية'); return; }
+
+  let poster = document.getElementById('printPoster');
+  if(!poster){
+    poster = document.createElement('div');
+    poster.id = 'printPoster';
+    document.body.appendChild(poster);
+  }
+  poster.innerHTML = `
+    <div class="pp-inner">
+      <div class="pp-brand">${escapeHTML(data.name)}</div>
+      <div class="pp-title">امسح الرمز وانضم لبرنامج الولاء 🎁</div>
+      <div class="pp-qr" id="printPosterQr"></div>
+      <div class="pp-steps">
+        <div class="pp-step"><span>١</span>افتح كاميرا جوالك ووجّهها على الرمز — بدون تنزيل أي تطبيق</div>
+        <div class="pp-step"><span>٢</span>اضغط الرابط اللي يطلع وسجّل اسمك ورقم جوالك</div>
+        <div class="pp-step"><span>٣</span>بكل زيارة اطلب من الموظف يضيف لك ختم</div>
+      </div>
+      ${data.reward ? `<div class="pp-reward">🎁 اجمع ${escapeHTML(String(data.threshold||''))} أختام واحصل على: ${escapeHTML(data.reward)}</div>` : ''}
+      <div class="pp-link">${escapeHTML(data.link)}</div>
+    </div>
+  `;
+  const qrHolder = document.getElementById('printPosterQr');
+  qrHolder.innerHTML = '';
+  new QRCode(qrHolder, { text: data.link, width:260, height:260, colorDark:'#1B2420', colorLight:'#ffffff' });
+
+  setTimeout(()=>{ window.print(); }, 150);
 }
 
 function csvEscape(val){
