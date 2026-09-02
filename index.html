@@ -4171,7 +4171,8 @@ function renderBizListHTML(businesses){
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           ${badge}
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}" target="_blank" rel="noopener" class="link-btn" style="color:#25D366;" title="راسله بالواتساب">💬 واتساب</a>
             <button class="link-btn" onclick="toggleSubscription('${b.id}')">${b.subscriptionStatus==='active'?'إيقاف':'تفعيل'}</button>
             <button class="link-btn" onclick="adminEditBusiness('${b.id}')">تعديل</button>
             <button class="link-btn" style="color:var(--danger);" onclick="adminDeleteBusiness('${b.id}')">حذف</button>
