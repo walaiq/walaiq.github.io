@@ -989,6 +989,19 @@ async function storageGet(key){
   warnDegradedOnce();
   return Object.prototype.hasOwnProperty.call(_memoryStore, key) ? _memoryStore[key] : null;
 }
+
+// نسخة هادئة من storageGet — تُستخدم للقراءات الاختيارية غير الحرجة (مثل تنبيه الإدارة الجماعي)
+// اللي ممكن يرفضها Firestore لحساب تاجر عادي (لأنها محمية للإدارة فقط)، بدون ما نفزّع التاجر
+// برسالة "تعذّر الاتصال بقاعدة البيانات" وهو أصلاً كل شي شغال عنده طبيعي
+async function storageGetSilent(key){
+  if(!_db) return null;
+  try{
+    const doc = await _db.collection('walaData').doc(key).get();
+    return doc.exists ? doc.data().value : null;
+  }catch(e){
+    return null;
+  }
+}
 async function storageSet(key, value){
   if(_db){
     try{
@@ -1663,7 +1676,7 @@ function startPartnersAutoScroll(){
 
 async function loadLandingExtras(){
   try{
-    const pRaw = await storageGet('partners-list');
+    const pRaw = await storageGetSilent('partners-list');
     const partners = pRaw ? JSON.parse(pRaw) : [];
     const pSection = document.getElementById('partnersSection');
     const pRow = document.getElementById('partnersRow');
@@ -1676,7 +1689,7 @@ async function loadLandingExtras(){
     } else if(pSection){ pSection.style.display = 'none'; }
   }catch(e){}
   try{
-    const tRaw = await storageGet('testimonials-list');
+    const tRaw = await storageGetSilent('testimonials-list');
     const legacyItems = tRaw ? JSON.parse(tRaw) : [];
     const bizItems = await listBizTestimonials();
     const items = [...legacyItems, ...bizItems.map(t => ({name:t.bizName, text:t.text}))];
@@ -2394,7 +2407,7 @@ async function renderMerchantDashboard(){
   let trialBroadcastBanner = '';
   if(currentBiz.subscriptionStatus === 'trial'){
     try{
-      const raw = await storageGet('trial-broadcast-notice');
+      const raw = await storageGetSilent('trial-broadcast-notice');
       if(raw){
         const notice = JSON.parse(raw);
         const seenTime = parseInt(localStorage.getItem('wala_trialNoticeSeen_'+currentBiz.id) || '0', 10);
