@@ -110,6 +110,16 @@
   textarea{resize:vertical; min-height:70px;}
   input[type=color]{width:52px; height:40px; padding:2px; border:1.5px solid var(--border); border-radius:8px; background:#FCFBF8;}
   .color-row{display:flex; align-items:center; gap:12px;}
+  .swatch-row{display:flex; flex-wrap:wrap; gap:9px; margin-top:6px;}
+  .swatch{width:34px; height:34px; border-radius:50%; border:2.5px solid transparent; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.15); transition:.15s;}
+  .swatch.active{border-color:var(--ink); transform:scale(1.12);}
+  .swatch-custom{width:34px; height:34px; border-radius:50%; padding:0; border:2px dashed var(--border); background:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; overflow:hidden;}
+  .swatch-custom input[type="color"]{width:44px; height:44px; border:none; cursor:pointer; opacity:0; position:absolute;}
+  .offer-chip-editable{display:inline-flex; align-items:center; gap:6px; background:var(--accent-light); color:var(--primary-dark); font-size:12.5px; font-weight:700; padding:7px 8px 7px 12px; border-radius:20px; margin:0 4px 8px 0;}
+  .offer-chip-editable button{background:rgba(0,0,0,.12); color:inherit; border:none; width:18px; height:18px; border-radius:50%; font-size:11px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .logo-upload-row{display:flex; align-items:center; gap:14px; margin-top:6px;}
+  .logo-preview{width:56px; height:56px; border-radius:50%; object-fit:cover; border:1.5px solid var(--border); background:#fff;}
+  .logo-preview-empty{width:56px; height:56px; border-radius:50%; border:1.5px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--muted); flex-shrink:0;}
   .cat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:6px;}
   .cat-btn{display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; border-radius:14px; border:1.5px solid var(--border); background:#fff; font-size:11px; font-weight:700; color:var(--ink); cursor:pointer;}
   .cat-btn span{font-size:20px;}
@@ -135,6 +145,19 @@
   .loycard .lc-name{font-family:'Cairo',sans-serif; font-weight:800; font-size:18px;}
   .loycard .lc-sub{font-size:11.5px; opacity:.85; margin-top:2px;}
   .lc-badge{width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.22); display:flex; align-items:center; justify-content:center; font-size:15px;}
+  .lc-badge-logo{background:#fff; overflow:hidden; padding:0; flex-shrink:0;}
+  .lc-badge-logo img{width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;}
+  .lc-founded{font-size:10px; opacity:.8; margin-top:3px;}
+  .color-swatches{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .color-swatch{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; flex-shrink:0; transition:.15s; box-shadow:0 1px 3px rgba(0,0,0,.15);}
+  .color-swatch.active{border-color:var(--ink); transform:scale(1.12);}
+  .logo-upload-row{display:flex; align-items:center; gap:12px; margin-top:8px;}
+  .logo-preview{width:56px; height:56px; border-radius:50%; background:var(--surface-2, #f0f0f0); border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; font-size:22px;}
+  .logo-preview img{width:100%; height:100%; object-fit:cover;}
+  .offer-chips-wrap{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .offer-chip-editable{display:flex; align-items:center; gap:6px; background:var(--accent-light); color:var(--primary-dark); font-size:12.5px; font-weight:700; padding:7px 10px 7px 6px; border-radius:20px;}
+  .offer-chip-editable button{background:rgba(0,0,0,.12); color:inherit; border:none; width:18px; height:18px; border-radius:50%; font-size:11px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .live-preview-sticky{position:sticky; top:8px; z-index:5; margin-bottom:16px;}
   .lc-badge.shine{animation:shineStar 3.6s ease-in-out infinite;}
   @keyframes shineStar{
     0%,100%{transform:scale(1) rotate(0deg); filter:drop-shadow(0 0 0px #FFE9A8);}
@@ -149,6 +172,26 @@
   .stamp{width:32px; height:32px; border-radius:50%; border:2px solid rgba(255,255,255,.5); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; transition:.2s;}
   .stamp.filled{background:radial-gradient(circle at 35% 30%, #FFE9A8, #E8B84B 60%, #B9862A); color:#5C3D0A; border-color:transparent; box-shadow:0 2px 8px rgba(0,0,0,.25), 0 0 0 2px rgba(255,223,140,.4);}
   .stamp.filled.stamp-new{animation:stampGlow .9s cubic-bezier(.2,1.4,.4,1);}
+  .stamp:not(.filled){position:relative;}
+  .stamp:not(.filled)::after{
+    content:'✨'; font-size:12px; opacity:.2;
+    animation: stampTwinkle 2.6s ease-in-out infinite;
+    animation-delay: calc(var(--si, 0) * .22s);
+  }
+  @keyframes stampTwinkle{
+    0%,100%{ opacity:.12; transform:scale(.7); }
+    50%{ opacity:.75; transform:scale(1.1); }
+  }
+  .loycard::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(115deg, transparent 35%, rgba(255,255,255,.16) 48%, rgba(255,255,255,.22) 52%, transparent 65%);
+    background-size:220% 100%;
+    animation: cardShimmer 4.8s ease-in-out infinite;
+  }
+  @keyframes cardShimmer{
+    0%{ background-position: 200% 0; }
+    55%,100%{ background-position: -60% 0; }
+  }
   @keyframes stampGlow{
     0%{transform:scale(0); opacity:0; box-shadow:0 0 0 0 rgba(255,210,100,0);}
     45%{transform:scale(1.35); opacity:1; box-shadow:0 0 18px 6px rgba(255,210,100,.7);}
@@ -2790,7 +2833,8 @@ function cardPreviewHTML(biz, custData){
   const tp = getTierProgress(biz, points);
   let stamps = '';
   for(let i=1;i<=tp.rangeSize;i++){
-    stamps += `<div class="stamp ${i<=tp.progressInRange?'filled':''}">${i<=tp.progressInRange?'⭐':''}</div>`;
+    const filled = i<=tp.progressInRange;
+    stamps += `<div class="stamp ${filled?'filled':''}" style="--si:${i-1};">${filled?'⭐':''}</div>`;
   }
   const offers = (biz.offers||[]);
   const chipPalette = [
@@ -2802,11 +2846,13 @@ function cardPreviewHTML(biz, custData){
     const c = chipPalette[i % chipPalette.length];
     return `<span class="offer-chip" style="background:${c.bg}; color:${c.fg};">${escapeHTML(o)}</span>`;
   }).join('')}</div>` : '';
+  const foundedYear = biz.foundedAt ? new Date(biz.foundedAt).getFullYear() : null;
+  const badgeInner = biz.logo ? `<img src="${biz.logo}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : '★';
   return `
     <div class="loycard" style="background:linear-gradient(135deg, ${biz.primary}, ${shade(biz.primary,-18)});">
       <div class="lc-top">
-        <div><div class="lc-name">${escapeHTML(biz.name)}</div><div class="lc-sub">بطاقة ولاء رقمية</div></div>
-        <div class="lc-badge">★</div>
+        <div><div class="lc-name">${escapeHTML(biz.name)}</div><div class="lc-sub">بطاقة ولاء رقمية${foundedYear?' · منذ '+foundedYear:''}</div></div>
+        <div class="lc-badge">${badgeInner}</div>
       </div>
       <div class="stampgrid">${stamps}</div>
       <div class="lc-foot">
@@ -3085,41 +3131,195 @@ function renderWhatsappSendList(){
   `;
 }
 
+const CARD_COLOR_PALETTE = [
+  {primary:'#161B33', accent:'#6C5CE7'},
+  {primary:'#0B4A37', accent:'#F5B942'},
+  {primary:'#7A1F3D', accent:'#F2A65A'},
+  {primary:'#1B4965', accent:'#5FA8D3'},
+  {primary:'#5C3D0A', accent:'#E8B84B'},
+  {primary:'#2D2A32', accent:'#E84855'},
+  {primary:'#132A13', accent:'#90A955'},
+  {primary:'#3A0CA3', accent:'#F72585'}
+];
+
 function renderEditCard(){
-  const offersText = (currentBiz.offers||[]).join('\n');
   const curCat = currentBiz.category || 'other';
+  window._editCategory = curCat;
+  window._editOffers = (currentBiz.offers||[]).slice();
+  window._editLogo = currentBiz.logo || '';
+
   document.getElementById('merchantView').innerHTML = `
+    <div class="live-preview-sticky">
+      <div id="edLivePreview"></div>
+    </div>
+
     <div class="card">
       <div class="eyebrow">تعديل</div>
       <h3>تصميم بطاقة ${escapeHTML(currentBiz.name)}</h3>
-      <label>اسم العمل</label>
-      <input type="text" id="edName" value="${escapeHTML(currentBiz.name)}">
+
+      <label>شعار المحل (اختياري)</label>
+      <div class="logo-upload-row">
+        <div class="logo-preview" id="edLogoPreview">${window._editLogo ? `<img src="${window._editLogo}">` : '🏪'}</div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+          <input type="file" id="edLogoFile" accept="image/*" class="hidden" onchange="handleLogoFileSelect(event)">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('edLogoFile').click()">📷 رفع شعار</button>
+          ${window._editLogo ? `<button type="button" class="link-btn" style="color:var(--danger);" onclick="removeEditLogo()">حذف الشعار</button>` : ''}
+        </div>
+      </div>
+
+      <label style="margin-top:14px;">اسم العمل</label>
+      <input type="text" id="edName" value="${escapeHTML(currentBiz.name)}" oninput="refreshEditPreview()">
+
       <label>مجال النشاط</label>
       <div class="cat-grid" id="edCatGrid">${BIZ_CATEGORIES.map(c=>`<button type="button" class="cat-btn ${c.id===curCat?'active':''}" data-cat="${c.id}" onclick="selectEditCategory('${c.id}')"><span>${c.icon}</span>${c.label}</button>`).join('')}</div>
-      <label style="margin-top:14px;">تاريخ التأسيس (اختياري)</label>
-      <input type="date" id="edFoundedAt" value="${currentBiz.foundedAt || ''}">
+
+      <label style="margin-top:14px;">تاريخ التأسيس (اختياري — يظهر كـ "منذ ٢٠٢٠" على بطاقتك)</label>
+      <input type="date" id="edFoundedAt" value="${currentBiz.foundedAt || ''}" oninput="refreshEditPreview()">
+
       <div class="row-2" style="margin-top:14px;">
-        <div><label>لون البطاقة</label><div class="color-row"><input type="color" id="edPrimary" value="${currentBiz.primary}"></div></div>
-        <div><label>لون التمييز</label><div class="color-row"><input type="color" id="edAccent" value="${currentBiz.accent}"></div></div>
+        <div>
+          <label>لون البطاقة</label>
+          <div class="color-swatches" id="edPrimarySwatches">${CARD_COLOR_PALETTE.map(p=>`<button type="button" class="color-swatch ${p.primary.toLowerCase()===String(currentBiz.primary).toLowerCase()?'active':''}" style="background:${p.primary};" data-hex="${p.primary}" onclick="pickPaletteColor('primary','${p.primary}')" title="${p.primary}"></button>`).join('')}</div>
+          <div class="color-row" style="margin-top:8px;"><input type="color" id="edPrimary" value="${currentBiz.primary}" oninput="onCustomColorChange('primary')"></div>
+        </div>
+        <div>
+          <label>لون التمييز</label>
+          <div class="color-swatches" id="edAccentSwatches">${CARD_COLOR_PALETTE.map(p=>`<button type="button" class="color-swatch ${p.accent.toLowerCase()===String(currentBiz.accent).toLowerCase()?'active':''}" style="background:${p.accent};" data-hex="${p.accent}" onclick="pickPaletteColor('accent','${p.accent}')" title="${p.accent}"></button>`).join('')}</div>
+          <div class="color-row" style="margin-top:8px;"><input type="color" id="edAccent" value="${currentBiz.accent}" oninput="onCustomColorChange('accent')"></div>
+        </div>
       </div>
-      <label>درجات المكافآت (تتراكم للأبد، ما ترجع صفر)</label>
+
+      <label style="margin-top:14px;">درجات المكافآت (تتراكم للأبد، ما ترجع صفر)</label>
       <p style="font-size:12px; color:var(--muted); margin:-6px 0 8px;">مثال: عند الختم 5 خصم 10%، وعند الختم 10 خصم 15%. بعد آخر درجة، النظام يكرر نفس المسافة ونفس آخر مكافأة تلقائياً.</p>
       <div id="edTiersList">${getRewardTiers(currentBiz).map((t,i)=>tierRowHTML(t.points, t.reward, i)).join('')}</div>
       <button type="button" class="btn btn-ghost" style="margin-top:6px;" onclick="addTierRow()">➕ أضف درجة</button>
-      <label style="margin-top:14px;">عروضك الحالية (سطر لكل عرض)</label>
-      <textarea id="edOffers">${escapeHTML(offersText)}</textarea>
+
+      <label style="margin-top:14px;">عروضك الحالية</label>
+      <div class="offer-chips-wrap" id="edOffersChips">${renderOfferChipsHTML()}</div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="text" id="edOfferInput" placeholder="اكتب عرض واضغط إضافة..." style="flex:1;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); addOfferChip(); }">
+        <button type="button" class="btn btn-ghost btn-sm" style="width:auto; padding:0 16px;" onclick="addOfferChip()">➕ إضافة</button>
+      </div>
+
       <button class="btn btn-primary" style="margin-top:16px;" onclick="saveCardEdit()">حفظ التعديلات</button>
       <button class="btn btn-ghost" style="margin-top:10px;" onclick="renderMerchantDashboard()">إلغاء</button>
     </div>
   `;
-  window._editCategory = curCat;
+  refreshEditPreview();
+}
+
+function buildEditPreviewBizObject(){
+  const tierRows = document.querySelectorAll('#edTiersList .tier-row');
+  const tiers = [];
+  for(const row of tierRows){
+    const pts = parseInt(row.querySelector('.edTierPoints').value) || 0;
+    const reward = row.querySelector('.edTierReward').value.trim();
+    if(pts > 0){ tiers.push({points: pts, reward: reward || 'مكافأة'}); }
+  }
+  if(tiers.length === 0) tiers.push({points:6, reward:'مكافأتك هنا'});
+  tiers.sort((a,b)=>a.points-b.points);
+  return {
+    name: document.getElementById('edName').value.trim() || currentBiz.name,
+    primary: document.getElementById('edPrimary').value,
+    accent: document.getElementById('edAccent').value,
+    foundedAt: document.getElementById('edFoundedAt').value || '',
+    logo: window._editLogo || '',
+    offers: window._editOffers || [],
+    rewardTiers: tiers,
+    threshold: tiers[0].points,
+    rewardText: tiers[0].reward
+  };
+}
+
+function refreshEditPreview(){
+  const el = document.getElementById('edLivePreview');
+  if(!el) return;
+  const previewBiz = buildEditPreviewBizObject();
+  const firstTierPts = previewBiz.rewardTiers[0].points;
+  const previewPoints = Math.max(1, Math.floor(firstTierPts/2));
+  el.innerHTML = cardPreviewHTML(previewBiz, {points: previewPoints});
+}
+
+/* -------- شعار المحل: رفع صورة، تصغيرها بالمتصفح، وتخزينها كـ Data URL صغير -------- */
+function handleLogoFileSelect(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ toast('اختر ملف صورة صحيح'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = 200;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      // نقص المربع الأوسط من الصورة عشان الشعار يطلع مركزي ومربع قبل ما نصغّره
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width - minSide) / 2;
+      const sy = (img.height - minSide) / 2;
+      ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+      window._editLogo = canvas.toDataURL('image/jpeg', 0.82);
+      document.getElementById('edLogoPreview').innerHTML = `<img src="${window._editLogo}">`;
+      const removeBtnWrap = document.querySelector('.logo-upload-row > div:last-child');
+      if(removeBtnWrap && !removeBtnWrap.querySelector('.link-btn')){
+        removeBtnWrap.insertAdjacentHTML('beforeend', `<button type="button" class="link-btn" style="color:var(--danger);" onclick="removeEditLogo()">حذف الشعار</button>`);
+      }
+      refreshEditPreview();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function removeEditLogo(){
+  window._editLogo = '';
+  document.getElementById('edLogoPreview').innerHTML = '🏪';
+  const removeBtn = document.querySelector('.logo-upload-row .link-btn');
+  if(removeBtn) removeBtn.remove();
+  refreshEditPreview();
+}
+
+/* -------- ألوان جاهزة (Palette) + منتقي مخصص -------- */
+function pickPaletteColor(type, hex){
+  const inputId = type==='primary' ? 'edPrimary' : 'edAccent';
+  document.getElementById(inputId).value = hex;
+  document.querySelectorAll('#ed'+(type==='primary'?'Primary':'Accent')+'Swatches .color-swatch').forEach(sw=>{
+    sw.classList.toggle('active', sw.dataset.hex.toLowerCase()===hex.toLowerCase());
+  });
+  refreshEditPreview();
+}
+function onCustomColorChange(type){
+  document.querySelectorAll('#ed'+(type==='primary'?'Primary':'Accent')+'Swatches .color-swatch').forEach(sw=>sw.classList.remove('active'));
+  refreshEditPreview();
+}
+
+/* -------- عروضك الحالية كـ Chips قابلة للإضافة والحذف -------- */
+function renderOfferChipsHTML(){
+  const offers = window._editOffers || [];
+  if(offers.length===0) return `<span style="font-size:12px; color:var(--muted);">ما فيه عروض مضافة بعد</span>`;
+  return offers.map((o,i)=>`
+    <span class="offer-chip-editable">${escapeHTML(o)}<button type="button" onclick="removeOfferChip(${i})">✕</button></span>
+  `).join('');
+}
+function addOfferChip(){
+  const input = document.getElementById('edOfferInput');
+  const val = input.value.trim();
+  if(!val) return;
+  window._editOffers.push(val);
+  input.value = '';
+  document.getElementById('edOffersChips').innerHTML = renderOfferChipsHTML();
+  refreshEditPreview();
+}
+function removeOfferChip(idx){
+  window._editOffers.splice(idx,1);
+  document.getElementById('edOffersChips').innerHTML = renderOfferChipsHTML();
+  refreshEditPreview();
 }
 
 function tierRowHTML(points, reward, i){
   return `
     <div class="row-2 tier-row" data-idx="${i}" style="align-items:flex-end; gap:8px; margin-bottom:8px;">
-      <div style="flex:0 0 80px;"><label style="font-size:11px;">عند ختم</label><input type="text" class="edTierPoints" value="${points}" inputmode="numeric"></div>
-      <div style="flex:1;"><label style="font-size:11px;">المكافأة</label><input type="text" class="edTierReward" value="${escapeHTML(reward)}"></div>
+      <div style="flex:0 0 80px;"><label style="font-size:11px;">عند ختم</label><input type="text" class="edTierPoints" value="${points}" inputmode="numeric" oninput="refreshEditPreview()"></div>
+      <div style="flex:1;"><label style="font-size:11px;">المكافأة</label><input type="text" class="edTierReward" value="${escapeHTML(reward)}" oninput="refreshEditPreview()"></div>
       <button type="button" class="icon-btn" onclick="removeTierRow(this)" title="حذف الدرجة">🗑</button>
     </div>
   `;
@@ -3128,11 +3328,13 @@ function addTierRow(){
   const list = document.getElementById('edTiersList');
   const idx = list.children.length;
   list.insertAdjacentHTML('beforeend', tierRowHTML(idx*5+5, '', idx));
+  refreshEditPreview();
 }
 function removeTierRow(btn){
   const rows = document.querySelectorAll('#edTiersList .tier-row');
   if(rows.length <= 1){ toast('لازم تبقى درجة وحدة على الأقل'); return; }
   btn.closest('.tier-row').remove();
+  refreshEditPreview();
 }
 
 function selectEditCategory(catId){
@@ -3148,6 +3350,7 @@ async function saveCardEdit(){
   currentBiz.foundedAt = document.getElementById('edFoundedAt').value || currentBiz.foundedAt || '';
   currentBiz.primary = document.getElementById('edPrimary').value;
   currentBiz.accent = document.getElementById('edAccent').value;
+  currentBiz.logo = window._editLogo || '';
 
   const tierRows = document.querySelectorAll('#edTiersList .tier-row');
   const tiers = [];
@@ -3163,7 +3366,7 @@ async function saveCardEdit(){
   currentBiz.threshold = tiers[0].points;
   currentBiz.rewardText = tiers[0].reward;
 
-  currentBiz.offers = document.getElementById('edOffers').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  currentBiz.offers = window._editOffers || [];
   await saveBusiness(currentBiz.id, currentBiz);
   if(oldName !== newName){
     await logActivity(currentBiz.id, newName, 'name', oldName, newName);
@@ -3444,7 +3647,7 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
   for(let i=1;i<=tp.rangeSize;i++){
     const isFilled = i<=tp.progressInRange;
     const isNew = isFilled && (tp.rangeStart+i) > seen;
-    stamps += `<div class="stamp ${isFilled?'filled':''} ${isNew?'stamp-new':''}">${isFilled?'⭐':''}</div>`;
+    stamps += `<div class="stamp ${isFilled?'filled':''} ${isNew?'stamp-new':''}" style="--si:${i-1};">${isFilled?'⭐':''}</div>`;
   }
   const offers = (biz.offers||[]);
   const chipPalette = [
@@ -3489,8 +3692,8 @@ function cardPreviewHTMLPublic(biz, custData, lastSeenPoints){
   return `
     <div class="loycard" style="background:linear-gradient(135deg, ${biz.primary}, ${shade(biz.primary,-18)});">
       <div class="lc-top">
-        <div><div class="lc-name">${escapeHTML(biz.name)}</div><div class="lc-sub">بطاقة ولاء رقمية</div></div>
-        <div class="lc-badge">★</div>
+        <div><div class="lc-name">${escapeHTML(biz.name)}</div><div class="lc-sub">بطاقة ولاء رقمية${biz.foundedAt ? ' · منذ '+new Date(biz.foundedAt).getFullYear() : ''}</div></div>
+        <div class="lc-badge">${biz.logo ? `<img src="${biz.logo}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : '★'}</div>
       </div>
       <div class="stampgrid">${stamps}</div>
       <div class="lc-foot">
