@@ -1578,8 +1578,19 @@ async function init(){
       clearBizSession();
     }
   }
-  // استرجاع جلسة الإدارة المحفوظة (لازم تصير قبل التعامل مع mode=admin عشان الرفرش ما يسجل خروج)
-  if(isAdminSessionSaved()){ adminAuthed = true; }
+  // استرجاع جلسة الإدارة المحفوظة (لازم تصير قبل التعامل مع mode=admin عشان الرفرش ما يسجل خروج) —
+  // مهم: العلامة المحفوظة بالجهاز وحدها ما تكفي، لازم نتأكد إن جلسة Firebase الحقيقية لسا شغالة
+  // ومطابقة لبريد إدارة معروف، وإلا كل عمليات القراءة/الكتابة المحمية بقواعد الإدارة بترفض بصمت
+  // (وتطلع رسالة "تعذّر الاتصال بقاعدة البيانات" رغم إن المشكلة فعلياً صلاحيات وليست اتصال)
+  if(isAdminSessionSaved()){
+    const authUser = await waitForAuthReady();
+    if(authUser && ADMIN_EMAILS.includes((authUser.email||'').toLowerCase())){
+      adminAuthed = true;
+    } else {
+      clearAdminSession();
+      adminAuthed = false;
+    }
+  }
 
   if(mode==='admin'){
     document.getElementById('landingView').classList.add('hidden');
