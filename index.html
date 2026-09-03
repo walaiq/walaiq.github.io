@@ -66,23 +66,39 @@
 </script>
 <style>
   :root{
-    --bg:#F4F5FA; --surface:#FFFFFF; --ink:#13182B;
+    --bg:#F4F5FA; --surface:#FFFFFF; --surface-2:#F2F1F8; --ink:#13182B;
     --primary:#161B33; --primary-dark:#0B0E1F;
     --accent:#6C5CE7; --accent-light:#ECE8FE;
     --family:#8B5CF6; --family-light:#F1EBFE;
     --sky:#3B82F6; --sky-light:#E4ECFE;
     --muted:#6B7280; --border:#E4E7EE; --danger:#DC3545;
+    --radius-lg:20px; --radius-md:14px;
+    --shadow-soft:0 3px 14px -6px rgba(20,30,50,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0E1018; --surface:#171A26; --surface-2:#1E2230; --ink:#F1F2F7;
+      --primary:#2A3050; --primary-dark:#12141F;
+      --accent:#8C7EF0; --accent-light:#282350;
+      --family:#A78BFA; --family-light:#2A2340;
+      --sky:#5B9BF5; --sky-light:#1E2C42;
+      --muted:#9199AC; --border:#2B2F40; --danger:#EF5A6A;
+    }
+    input[type=text], input[type=tel], input[type=password], input[type=date], textarea, select{ background:#1C2030 !important; color:var(--ink) !important; }
+    .lc-badge{ background:rgba(255,255,255,.14); }
+    .topbar{ background:rgba(23,26,38,.9) !important; }
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{background:var(--bg); color:var(--ink); font-family:'Tajawal',sans-serif;}
+  html,body{background:var(--bg); color:var(--ink); font-family:'Tajawal',sans-serif; font-weight:400;}
   body{min-height:100vh; padding-bottom:40px;}
   h1,h2,h3,.display{font-family:'Cairo',sans-serif;}
+  p, label, .muted-text{font-weight:500;}
   button{font-family:inherit; cursor:pointer; border:none;}
   input, textarea, select{font-family:inherit;}
   :focus-visible{outline:3px solid var(--accent); outline-offset:2px;}
-  .wrap{max-width:480px; margin:0 auto; padding:18px 16px 0;}
+  .wrap{max-width:480px; margin:0 auto; padding:22px 16px 0;}
 
-  .topbar{position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px; padding:12px 16px; margin:-18px -16px 20px; background:rgba(251,246,239,.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--border);}
+  .topbar{position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px; padding:12px 16px; margin:-22px -16px 22px; background:rgba(251,246,239,.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--border);}
   .seal{width:42px; height:42px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 0 var(--primary-dark), 0 4px 10px -3px rgba(10,74,55,.4);}
   .seal svg{width:30px; height:30px;}
   .seal.seal-img{background:#fff; padding:4px;}
@@ -93,11 +109,13 @@
   .logout-btn:active{background:var(--danger); color:#fff; transform:scale(.96);}
 
   .tabs{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:5px; margin-bottom:20px; gap:4px; box-shadow:0 3px 12px -6px rgba(20,40,32,.1);}
-  .tab-btn{flex:1; padding:10px 6px; border-radius:10px; background:transparent; font-weight:700; font-size:12.5px; color:var(--muted); transition:.2s;}
+  .tab-btn{flex:1; padding:10px 6px; border-radius:10px; background:transparent; font-weight:700; font-size:12.5px; color:var(--muted); transition:.2s; display:flex; align-items:center; justify-content:center; gap:6px;}
+  .tab-icon{width:16px; height:16px; flex-shrink:0;}
   .tab-btn.active{background:var(--primary); color:#fff;}
 
-  .card{background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px; margin-bottom:16px; box-shadow:0 4px 18px -8px rgba(20,40,32,.08); transition:.2s;}
-  .card h3{font-size:15px; margin-bottom:14px;}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; margin-bottom:20px; box-shadow:var(--shadow-soft); transition:.2s; animation:cardEnter .28s ease both;}
+  @keyframes cardEnter{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .card h3{font-size:15px; margin-bottom:16px;}
   .eyebrow{font-size:11px; font-weight:700; color:var(--accent); letter-spacing:1px; text-transform:uppercase; margin-bottom:4px;}
 
   label{display:block; font-size:13px; font-weight:700; margin:14px 0 6px;}
@@ -126,7 +144,8 @@
   .cat-btn.active{border-color:var(--primary); background:var(--accent-light); color:var(--primary-dark);}
   .row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 
-  .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:15px 20px; border-radius:16px; font-weight:800; font-size:14.5px; width:100%; transition:.18s; letter-spacing:.2px;}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:15px 20px; border-radius:16px; font-weight:800; font-size:14.5px; width:100%; transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease; letter-spacing:.2px; font-family:'Cairo',sans-serif;}
+  .btn:active{transform:scale(.96); opacity:.92;}
   .btn-primary{background:linear-gradient(135deg, var(--primary), var(--primary-dark)); color:#fff; box-shadow:0 6px 16px -6px rgba(10,74,55,.5);}
   .btn-whatsapp{background:#25D366; color:#fff; box-shadow:0 6px 16px -6px rgba(37,211,102,.55);}
   .btn-whatsapp:active{background:#1EBE5A;}
@@ -191,6 +210,11 @@
   @keyframes cardShimmer{
     0%{ background-position: 200% 0; }
     55%,100%{ background-position: -60% 0; }
+  }
+  .loycard::after{
+    content:''; position:absolute; left:-22px; bottom:-28px; width:120px; height:120px;
+    background-image:url('icon-512.png'); background-size:contain; background-repeat:no-repeat;
+    opacity:.09; pointer-events:none; filter:brightness(0) invert(1);
   }
   @keyframes stampGlow{
     0%{transform:scale(0); opacity:0; box-shadow:0 0 0 0 rgba(255,210,100,0);}
@@ -992,9 +1016,9 @@
   </div>
 
   <div class="tabs hidden" id="mainTabs">
-    <button class="tab-btn active" onclick="switchTab('merchant')">صاحب العمل</button>
-    <button class="tab-btn" onclick="switchTab('customer')">بطاقتي (زبون)</button>
-    <button class="tab-btn hidden" id="adminTabBtn" onclick="switchTab('admin')">الإدارة</button>
+    <button class="tab-btn active" onclick="switchTab('merchant')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 21V13h6v8"/></svg>صاحب العمل</button>
+    <button class="tab-btn" onclick="switchTab('customer')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>بطاقتي (زبون)</button>
+    <button class="tab-btn hidden" id="adminTabBtn" onclick="switchTab('admin')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5z"/></svg>الإدارة</button>
 
   </div>
 
@@ -2449,7 +2473,7 @@ async function renderMerchantDashboard(){
   // بطاقة الأسعار تظهر بلوحة التاجر بس وهو بالفترة التجريبية — أول ما يفعّل الاشتراك المدفوع تختفي من عنده تلقائياً
   // (وتبقى دائماً بالصفحة الرئيسية العامة للمنصة لكل الزوار)
   const pricingCardForTrial = currentBiz.subscriptionStatus === 'trial' ? `
-    <div class="card" style="text-align:center; background:linear-gradient(135deg, var(--sky-light), var(--accent-light));">
+    <div class="card" style="text-align:center; background:var(--accent-light); border-color:transparent;">
       <div class="eyebrow">فعّل اشتراكك</div>
       <h3>🚀 اشترك الآن — 15,000 د.ع شهرياً</h3>
       <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">يفتح لك: إرسال الرسائل، مشاركة رأيك بالصفحة الرئيسية، لوحة الإحصائيات الكاملة، والبحث بقائمة الزبائن.</p>
@@ -2467,7 +2491,7 @@ async function renderMerchantDashboard(){
         const seenTime = parseInt(localStorage.getItem('wala_trialNoticeSeen_'+currentBiz.id) || '0', 10);
         if(notice.time > seenTime){
           trialBroadcastBanner = `
-            <div class="card" style="background:linear-gradient(135deg, #FFF3E0, var(--surface)); border:1.5px solid #F5B942;">
+            <div class="card" style="background:#FFF3E0; border:1.5px solid #F5B942;">
               <div class="eyebrow" style="color:#B8860B;">📢 تنبيه من إدارة خَتم</div>
               <p style="font-size:13.5px; line-height:1.8;">${escapeHTML(notice.message)}</p>
               <button class="btn btn-ghost btn-sm" onclick="dismissTrialBroadcast(${notice.time})">فهمت ✅</button>
@@ -2799,7 +2823,7 @@ function smartSuggestionsHTML(customers, biz){
       </div>`;
   }
   return `
-    <div class="card" style="background:linear-gradient(135deg, var(--accent-light), var(--surface));">
+    <div class="card" style="background:var(--accent-light); border-color:transparent;">
       <div class="eyebrow">💡 اقتراحات ذكية</div>
       <h3>فرص ترجّع زبائنك</h3>
       ${items}
@@ -3388,7 +3412,7 @@ async function renderJoinFlow(bizId, refPhone){
     <div class="topbar" style="padding-top:0;">
       <div class="brand">${escapeHTML(biz.name)} <small>ختم</small></div>
     </div>
-    <div class="card" style="text-align:center; background:linear-gradient(135deg, var(--family-light), var(--accent-light));">
+    <div class="card" style="text-align:center; background:var(--family-light); border-color:transparent;">
       <div style="font-size:30px;">🤍</div>
       <h3 style="margin:8px 0 4px;">أهلاً فيك بعائلة ${escapeHTML(biz.name)}</h3>
       <p style="font-size:13px; color:var(--muted);">سجّل رقمك مرة وحدة، وكل زيارة بعدها تقرّبك خطوة لمكافأتك</p>
@@ -3609,7 +3633,7 @@ async function recentNoticesHTML(bizId){
   const recent = broadcasts.filter(b => new Date(b.time).getTime() >= cutoff).slice(-10).reverse();
   if(recent.length === 0) return '';
   return `
-    <div class="card" id="noticesCard" style="background:linear-gradient(135deg, var(--sky-light), var(--surface));">
+    <div class="card" id="noticesCard" style="background:var(--sky-light); border-color:transparent;">
       <div class="eyebrow">📣 آخر أخبار المحل</div>
       <div>${recent.map(b => `
         <div style="padding:10px 0; border-bottom:1px solid var(--border);">
@@ -4408,7 +4432,7 @@ async function renderAdminPanel(){
     </div>
 
     ${expiringSoon.length > 0 ? `
-    <div class="card" style="background:linear-gradient(135deg, #FFF3E0, var(--surface)); border:1.5px solid #F5B942;">
+    <div class="card" style="background:#FFF3E0; border:1.5px solid #F5B942;">
       <div class="eyebrow" style="color:#B8860B;">⏰ تنتبه — تجارب قربت تنتهي</div>
       <h3>${expiringSoon.length} حساب تجريبي باقي له 3 أيام أو أقل</h3>
       ${expiringSoon.map(b => {
