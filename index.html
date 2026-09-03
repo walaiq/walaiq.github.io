@@ -2201,6 +2201,11 @@ function renderTrialExpired(){
   `;
 }
 
+function dismissTrialBroadcast(time){
+  localStorage.setItem('wala_trialNoticeSeen_'+currentBiz.id, String(time));
+  renderMerchantDashboard();
+}
+
 function isPaidBiz(biz){
   return !!(biz && biz.subscriptionStatus === 'active');
 }
@@ -2385,6 +2390,27 @@ async function renderMerchantDashboard(){
     </div>
   ` : '';
 
+  // تنبيه جماعي من الإدارة للحسابات التجريبية (لو الإدارة أرسلت وحد جديد وما شافه التاجر بعد)
+  let trialBroadcastBanner = '';
+  if(currentBiz.subscriptionStatus === 'trial'){
+    try{
+      const raw = await storageGet('trial-broadcast-notice');
+      if(raw){
+        const notice = JSON.parse(raw);
+        const seenTime = parseInt(localStorage.getItem('wala_trialNoticeSeen_'+currentBiz.id) || '0', 10);
+        if(notice.time > seenTime){
+          trialBroadcastBanner = `
+            <div class="card" style="background:linear-gradient(135deg, #FFF3E0, var(--surface)); border:1.5px solid #F5B942;">
+              <div class="eyebrow" style="color:#B8860B;">📢 تنبيه من إدارة خَتم</div>
+              <p style="font-size:13.5px; line-height:1.8;">${escapeHTML(notice.message)}</p>
+              <button class="btn btn-ghost btn-sm" onclick="dismissTrialBroadcast(${notice.time})">فهمت ✅</button>
+            </div>
+          `;
+        }
+      }
+    }catch(e){ console.error('trial broadcast check failed', e); }
+  }
+
   const subBadge = currentBiz.subscriptionStatus==='active'
     ? `<span class="status-pill status-active">اشتراك فعّال</span>`
     : `<span class="status-pill status-inactive">${currentBiz.subscriptionStatus==='trial'?'فترة تجريبية':'اشتراك متوقف'}</span>`;
@@ -2405,6 +2431,7 @@ async function renderMerchantDashboard(){
       </div>
       ${trialNote}
     </div>
+    ${trialBroadcastBanner}
     ${pricingCardForTrial}
 
     <div class="stat-row">
@@ -2475,7 +2502,7 @@ async function renderMerchantDashboard(){
 
     <div class="card">
       <h3>👥 الزبائن (${customers.length})</h3>
-      ${isPaidBiz(currentBiz) ? `<input type="text" id="custSearchInput" placeholder="🔍 دوّر بالاسم أو رقم الجوال..." oninput="filterCustomerList()" style="margin-bottom:10px;">` : `<div class="note" style="margin-bottom:10px;">🔒 البحث خدمة للمشتركين فقط</div>`}
+      ${isPaidBiz(currentBiz) ? `<input type="text" id="custSearchInput" placeholder="🔍 دوّر بالاسم أو رقم الجوال..." oninput="filterCustomerList()" style="margin-bottom:10px;">` : `<div class="note" style="margin-bottom:10px;">🔒 ميزة حصرية للمشتركين فقط</div>`}
       <div id="custListArea">${renderCustomerListHTML(customers)}</div>
     </div>
 
@@ -2500,7 +2527,7 @@ async function renderMerchantDashboard(){
 
     ${isPaidBiz(currentBiz) ? '' : `
     <div class="card">
-      <div class="note">🔒 إرسال الرسائل أعلاه ميزة حصرية للمشتركين فقط — يمكنك تجهيز رسالتك الآن، وتصبح جاهزة للإرسال فور تفعيل اشتراكك.</div>
+      <div class="note">🔒 ميزة حصرية للمشتركين فقط — يمكنك تجهيز رسالتك الآن، وتصبح جاهزة للإرسال فور تفعيل اشتراكك.</div>
       <a class="btn btn-primary" style="margin-top:10px; text-decoration:none; display:block; text-align:center;" href="https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent('مرحباً، أريد الاشتراك المدفوع في منصة ختم لتفعيل ميزة إرسال الرسائل')}" target="_blank" rel="noopener">🚀 اشترك الآن لتفعيل الإرسال</a>
     </div>
     `}
@@ -2597,7 +2624,7 @@ function csvEscape(val){
 
 async function exportCustomersCSV(){
   if(!isPaidBiz(currentBiz)){
-    toast('🔒 تصدير بيانات الزبائن متاح فقط للمشتركين المدفوعين — اشترك لتفعيل هذه الميزة');
+    toast('🔒 ميزة حصرية للمشتركين فقط — اشترك لتفعيل تصدير بيانات الزبائن');
     return;
   }
   const {list:customers} = await loadAllCustomers(currentBiz.id);
@@ -2641,7 +2668,7 @@ function saveJSONFile(filename, dataObj){
 
 async function exportMerchantBackup(){
   if(!isPaidBiz(currentBiz)){
-    toast('🔒 النسخة الاحتياطية متاحة فقط للمشتركين المدفوعين — اشترك لتفعيل هذه الميزة');
+    toast('🔒 ميزة حصرية للمشتركين فقط — اشترك لتفعيل النسخة الاحتياطية');
     return;
   }
   const {list:customers, index} = await loadAllCustomers(currentBiz.id);
@@ -2826,7 +2853,7 @@ function renderCustomerListHTML(customers){
 
 async function contactCustomerWhatsapp(phone){
   if(!isPaidBiz(currentBiz)){
-    toast('🔒 التواصل المباشر مع الزبائن عبر واتساب متاح فقط للمشتركين المدفوعين — اشترك لتفعيل هذه الميزة');
+    toast('🔒 ميزة حصرية للمشتركين فقط — اشترك لتفعيل التواصل المباشر عبر واتساب');
     return;
   }
   const cust = await getCustomer(currentBiz.id, phone);
@@ -2928,7 +2955,7 @@ async function addStamp(phone){
 
 async function submitMyTestimonial(){
   if(!isPaidBiz(currentBiz)){
-    toast('🔒 مشاركة الرأي متاحة فقط للمشتركين المدفوعين — اشترك لتفعيل هذه الميزة');
+    toast('🔒 ميزة حصرية للمشتركين فقط — اشترك لتفعيل مشاركة الرأي');
     return;
   }
   const text = document.getElementById('myTestimonialText').value.trim();
@@ -2962,7 +2989,7 @@ async function removeCustomer(phone){
 
 async function sendBroadcast(){
   if(!isPaidBiz(currentBiz)){
-    toast('🔒 إرسال الرسائل متاح فقط للمشتركين المدفوعين — اشترك لتفعيل هذه الميزة');
+    toast('🔒 ميزة حصرية للمشتركين فقط — اشترك لتفعيل إرسال الرسائل');
     return;
   }
   const text = document.getElementById('broadcastMsg').value.trim();
@@ -4169,6 +4196,15 @@ async function renderAdminPanel(){
     </div>
     ` : ''}
 
+    <div class="card">
+      <div class="eyebrow">تنبيه جماعي</div>
+      <h3>📢 نبّه كل الحسابات التجريبية دفعة وحدة</h3>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">اكتب رسالة توصل تلقائياً داخل لوحة كل تاجر لسا بفترته التجريبية (${businesses.filter(b=>b.subscriptionStatus==='trial').length} حساب حالياً) — تطلع له كتنبيه بارز أول ما يفتح لوحته، بدون ما تحتاج تراسل كل وحد لحاله.</p>
+      <textarea id="trialBroadcastMsg" placeholder="مثلاً: فترتك التجريبية بمنصة ختم قربت تنتهي — فعّل اشتراكك الآن عشان ما تنقطع خدمتك 🎁"></textarea>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="adminSendTrialBroadcast()">📤 إرسال لكل التجريبيين</button>
+      <div class="note" style="margin-top:8px;">⚠️ هذا تنبيه داخل المنصة (يظهر بلوحتهم)، مو رسالة واتساب — واتساب ما يسمح بإرسال جماعي تلقائي من صفحة ويب لأسباب مكافحة السبام. لتواصل مباشر فردي استخدم زر "⏰ ذكّره" جنب كل حساب.</div>
+    </div>
+
     <div class="card" style="display:flex; flex-direction:column; gap:10px;">
       <button class="btn btn-accent" onclick="renderAdminAddBusiness()">➕ إضافة صاحب عمل جديد</button>
       <button class="btn btn-ghost" onclick="renderAdminActivityLog()">📜 سجل التغييرات</button>
@@ -4214,6 +4250,15 @@ function filterAdminBizList(){
     return matchesQuery && matchesStatus;
   });
   document.getElementById('adminBizListArea').innerHTML = renderBizListHTML(filtered);
+}
+
+async function adminSendTrialBroadcast(){
+  const msg = document.getElementById('trialBroadcastMsg').value.trim();
+  if(!msg){ toast('اكتب الرسالة أول'); return; }
+  await storageSet('trial-broadcast-notice', JSON.stringify({message: msg, time: Date.now()}));
+  await logAdminActivity('إرسال تنبيه جماعي للحسابات التجريبية', msg.slice(0,100));
+  toast('تم إرسال التنبيه لكل الحسابات التجريبية 📢');
+  document.getElementById('trialBroadcastMsg').value = '';
 }
 
 async function adminExportBusinessesCSV(){
