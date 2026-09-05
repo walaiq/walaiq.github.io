@@ -1706,6 +1706,15 @@ function showLandingPage(){
 
 /* -------- تتبّع زيارات الصفحة الرئيسية (زوار ما سجّلوا ولا عملوا شي) --------
    زيارة وحدة لكل جهاز (مو كل رفرش) عن طريق معرّف مخزّن محلياً + سقف يوم واحد بين كل تسجيل وثاني */
+async function getVisitorIP(){
+  try{
+    const res = await fetch('https://api.ipify.org?format=json');
+    if(!res.ok) return null;
+    const data = await res.json();
+    return data.ip || null;
+  }catch(e){ return null; } // خدمة خارجية — لو فشلت أو انحجبت، نكمل بدون آيبي بدون ما نوقف الموقع
+}
+
 async function trackSiteVisit(){
   try{
     if(!_db) return;
@@ -1720,14 +1729,17 @@ async function trackSiteVisit(){
     const ONE_DAY = 24*60*60*1000;
     if(now - lastLogged < ONE_DAY) return; // نفس الزيارة لو أقل من يوم، ما نعيد التسجيل
 
+    const ip = await getVisitorIP();
     const ref = _db.collection('siteVisits').doc(vid);
     let snap = null;
     try{ snap = await ref.get(); }catch(e){}
     if(snap && snap.exists){
       const data = snap.data();
-      await ref.update({lastVisit: now, visitCount: (data.visitCount||1)+1});
+      const payload = {lastVisit: now, visitCount: (data.visitCount||1)+1};
+      if(ip) payload.lastIp = ip;
+      await ref.update(payload);
     } else {
-      await ref.set({firstVisit: now, lastVisit: now, visitCount: 1});
+      await ref.set({firstVisit: now, lastVisit: now, visitCount: 1, firstIp: ip, lastIp: ip});
     }
     localStorage.setItem(lastLoggedKey, String(now));
   }catch(e){ /* التتبع ثانوي — أبداً ما نوقف تحميل الصفحة لو فشل */ }
@@ -4679,7 +4691,7 @@ async function renderAdminVisitsLog(){
       <h3>آخر الزيارات</h3>
       ${recent.length===0 ? `<div class="empty"><span class="icon">👁️</span><p>ما فيه زيارات مسجّلة بعد</p></div>` : recent.map(v => `
         <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
-          <span>زائر ${v.visitCount>1 ? `(زار ${v.visitCount} مرات)` : '(زيارة أولى)'}</span>
+          <span>زائر ${v.visitCount>1 ? `(زار ${v.visitCount} مرات)` : '(زيارة أولى)'} ${v.lastIp ? `<span style="direction:ltr; display:inline-block; color:var(--muted); font-size:11px;">· ${escapeHTML(v.lastIp)}</span>` : ''}</span>
           <span style="color:var(--muted);">${new Date(v.lastVisit).toLocaleString('ar')}</span>
         </div>
       `).join('')}
