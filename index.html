@@ -87,6 +87,8 @@
     input[type=text], input[type=tel], input[type=password], input[type=date], textarea, select{ background:#1C2030 !important; color:var(--ink) !important; }
     .lc-badge{ background:rgba(255,255,255,.14); }
     .topbar{ background:rgba(23,26,38,.9) !important; }
+    .site-header{ background:rgba(23,26,38,.85) !important; border-bottom-color:rgba(255,255,255,.08) !important; }
+    .site-logo-text{ color:var(--ink); }
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{background:var(--bg); color:var(--ink); font-family:'Tajawal',sans-serif; font-weight:400;}
@@ -1699,6 +1701,36 @@ function showLandingPage(){
   const devsFooterEl = document.getElementById('landingDevsFooter');
   if(devsFooterEl) devsFooterEl.innerHTML = devsFooterHTML();
   loadLandingExtras();
+  trackSiteVisit();
+}
+
+/* -------- تتبّع زيارات الصفحة الرئيسية (زوار ما سجّلوا ولا عملوا شي) --------
+   زيارة وحدة لكل جهاز (مو كل رفرش) عن طريق معرّف مخزّن محلياً + سقف يوم واحد بين كل تسجيل وثاني */
+async function trackSiteVisit(){
+  try{
+    if(!_db) return;
+    let vid = localStorage.getItem('wala_visitor_id');
+    if(!vid){
+      vid = 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+      localStorage.setItem('wala_visitor_id', vid);
+    }
+    const lastLoggedKey = 'wala_visitor_lastlog';
+    const lastLogged = parseInt(localStorage.getItem(lastLoggedKey) || '0', 10);
+    const now = Date.now();
+    const ONE_DAY = 24*60*60*1000;
+    if(now - lastLogged < ONE_DAY) return; // نفس الزيارة لو أقل من يوم، ما نعيد التسجيل
+
+    const ref = _db.collection('siteVisits').doc(vid);
+    let snap = null;
+    try{ snap = await ref.get(); }catch(e){}
+    if(snap && snap.exists){
+      const data = snap.data();
+      await ref.update({lastVisit: now, visitCount: (data.visitCount||1)+1});
+    } else {
+      await ref.set({firstVisit: now, lastVisit: now, visitCount: 1});
+    }
+    localStorage.setItem(lastLoggedKey, String(now));
+  }catch(e){ /* التتبع ثانوي — أبداً ما نوقف تحميل الصفحة لو فشل */ }
 }
 
 const PRICE_PLANS = {
@@ -2481,13 +2513,26 @@ async function renderMerchantDashboard(){
     </div>
   ` : '';
 
-  // تنبيه جماعي من الإدارة للحسابات التجريبية (لو الإدارة أرسلت وحد جديد وما شافه التاجر بعد)
+  // تنبيه جماعي من الإدارة — الحين يدعم استهداف دقيق (كل تجريبي / تجريبي قرب الانتهاء / كل فعّال)
   let trialBroadcastBanner = '';
-  if(currentBiz.subscriptionStatus === 'trial'){
-    try{
-      const raw = await storageGetSilent('trial-broadcast-notice');
-      if(raw){
-        const notice = JSON.parse(raw);
+  try{
+    const raw = await storageGetSilent('trial-broadcast-notice');
+    if(raw){
+      const notice = JSON.parse(raw);
+      const audience = notice.audience || 'all_trial';
+      const status = currentBiz.subscriptionStatus;
+      let eligible = false;
+      if(audience === 'all_trial'){
+        eligible = status === 'trial';
+      } else if(audience === 'expiring_trial'){
+        if(status === 'trial' && currentBiz.subscriptionUntil){
+          const daysLeft = Math.ceil((new Date(currentBiz.subscriptionUntil) - new Date()) / (1000*60*60*24));
+          eligible = daysLeft <= (notice.days || 5);
+        }
+      } else if(audience === 'all_active'){
+        eligible = status === 'active';
+      }
+      if(eligible){
         const seenTime = parseInt(localStorage.getItem('wala_trialNoticeSeen_'+currentBiz.id) || '0', 10);
         if(notice.time > seenTime){
           trialBroadcastBanner = `
@@ -2499,8 +2544,8 @@ async function renderMerchantDashboard(){
           `;
         }
       }
-    }catch(e){ console.error('trial broadcast check failed', e); }
-  }
+    }
+  }catch(e){ console.error('trial broadcast check failed', e); }
 
   const subBadge = currentBiz.subscriptionStatus==='active'
     ? `<span class="status-pill status-active">اشتراك فعّال</span>`
@@ -3147,11 +3192,13 @@ function renderWhatsappSendList(){
   wrap.innerHTML = `
     <div class="eyebrow" style="margin-top:18px;">📲 إرسال فعلي عبر واتساب (اختياري)</div>
     <p style="font-size:12.5px; color:var(--muted); line-height:1.7; margin-bottom:10px;">يصل الإشعار داخل التطبيق تلقائيًا عندما يفتح الزبون بطاقته. إذا أردت إيصاله مباشرة عبر واتساب، اضغط كل زر ليفتح لك محادثة جاهزة بنفس الرسالة — فقط اضغط "إرسال".</p>
-    ${targets.map(t => `
+    ${targets.map(t => {
+      const showName = t.name && t.name !== t.phone;
+      return `
       <a href="${whatsappLink(t.phone, text)}" target="_blank" rel="noopener" class="btn btn-ghost" style="text-decoration:none; margin-bottom:8px; justify-content:space-between; display:flex;">
-        <span>💬 ${escapeHTML(t.name)}</span><span style="direction:ltr;">${escapeHTML(t.phone)}</span>
+        <span>💬 ${showName ? escapeHTML(t.name) : 'زبون'}</span><span style="direction:ltr;">${escapeHTML(t.phone)}</span>
       </a>
-    `).join('')}
+    `;}).join('')}
   `;
 }
 
@@ -4449,10 +4496,23 @@ async function renderAdminPanel(){
 
     <div class="card">
       <div class="eyebrow">تنبيه جماعي</div>
-      <h3>📢 نبّه كل الحسابات التجريبية دفعة وحدة</h3>
-      <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">اكتب رسالة توصل تلقائياً داخل لوحة كل تاجر لسا بفترته التجريبية (${businesses.filter(b=>b.subscriptionStatus==='trial').length} حساب حالياً) — تطلع له كتنبيه بارز أول ما يفتح لوحته، بدون ما تحتاج تراسل كل وحد لحاله.</p>
+      <h3>📢 نبّه فئة من الحسابات دفعة وحدة</h3>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">اختر الفئة المستهدفة، اكتب رسالة، وتوصل تلقائياً داخل لوحة كل حساب مطابق أول ما يفتحها — بدون ما تحتاج تراسل كل وحد لحاله.</p>
+
+      <label style="margin-top:10px;">الفئة المستهدفة</label>
+      <div class="segment-choice" id="trialBroadcastAudience" style="margin-top:6px;">
+        <button type="button" class="seg-pill active" data-aud="all_trial" onclick="setTrialBroadcastAudience('all_trial')">كل التجريبي (${businesses.filter(b=>b.subscriptionStatus==='trial').length})</button>
+        <button type="button" class="seg-pill" data-aud="expiring_trial" onclick="setTrialBroadcastAudience('expiring_trial')">تجريبي قرب الانتهاء</button>
+        <button type="button" class="seg-pill" data-aud="all_active" onclick="setTrialBroadcastAudience('all_active')">كل الفعّال (${businesses.filter(b=>b.subscriptionStatus==='active').length})</button>
+      </div>
+      <div id="trialBroadcastDaysWrap" class="hidden" style="margin-top:10px;">
+        <label>باقي كم يوم أو أقل يُعتبر "قرب الانتهاء"؟</label>
+        <input type="text" id="trialBroadcastDays" inputmode="numeric" value="5" style="max-width:100px;">
+      </div>
+
+      <label style="margin-top:10px;">الرسالة</label>
       <textarea id="trialBroadcastMsg" placeholder="مثلاً: فترتك التجريبية بمنصة ختم قربت تنتهي — فعّل اشتراكك الآن عشان ما تنقطع خدمتك 🎁"></textarea>
-      <button class="btn btn-primary" style="margin-top:10px;" onclick="adminSendTrialBroadcast()">📤 إرسال لكل التجريبيين</button>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="adminSendTrialBroadcast()">📤 إرسال للفئة المختارة</button>
       <div class="note" style="margin-top:8px;">⚠️ هذا تنبيه داخل المنصة (يظهر بلوحتهم)، مو رسالة واتساب — واتساب ما يسمح بإرسال جماعي تلقائي من صفحة ويب لأسباب مكافحة السبام. لتواصل مباشر فردي استخدم زر "⏰ ذكّره" جنب كل حساب.</div>
     </div>
 
@@ -4460,6 +4520,7 @@ async function renderAdminPanel(){
       <button class="btn btn-accent" onclick="renderAdminAddBusiness()">➕ إضافة صاحب عمل جديد</button>
       <button class="btn btn-ghost" onclick="renderAdminActivityLog()">📜 سجل التغييرات</button>
       <button class="btn btn-ghost" onclick="renderAdminAuditLog()">🛡️ سجل نشاط الإدارة</button>
+      <button class="btn btn-ghost" onclick="renderAdminVisitsLog()">👁️ سجل زيارات الموقع</button>
       <button class="btn btn-ghost" onclick="renderAdminPartners()">🤝 شركاؤنا (الصفحة الرئيسية)</button>
       <button class="btn btn-ghost" onclick="renderAdminTestimonials()">💬 آراء العملاء (الصفحة الرئيسية)</button>
     </div>
@@ -4503,12 +4564,24 @@ function filterAdminBizList(){
   document.getElementById('adminBizListArea').innerHTML = renderBizListHTML(filtered);
 }
 
+window._trialBroadcastAudience = 'all_trial';
+function setTrialBroadcastAudience(aud){
+  window._trialBroadcastAudience = aud;
+  document.querySelectorAll('#trialBroadcastAudience .seg-pill').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.aud === aud);
+  });
+  document.getElementById('trialBroadcastDaysWrap').classList.toggle('hidden', aud !== 'expiring_trial');
+}
+
 async function adminSendTrialBroadcast(){
   const msg = document.getElementById('trialBroadcastMsg').value.trim();
   if(!msg){ toast('اكتب الرسالة أول'); return; }
-  await storageSet('trial-broadcast-notice', JSON.stringify({message: msg, time: Date.now()}));
-  await logAdminActivity('إرسال تنبيه جماعي للحسابات التجريبية', msg.slice(0,100));
-  toast('تم إرسال التنبيه لكل الحسابات التجريبية 📢');
+  const audience = window._trialBroadcastAudience || 'all_trial';
+  const days = parseInt(document.getElementById('trialBroadcastDays').value) || 5;
+  await storageSet('trial-broadcast-notice', JSON.stringify({message: msg, time: Date.now(), audience, days}));
+  const audienceLabel = {all_trial:'كل التجريبي', expiring_trial:`تجريبي قرب الانتهاء (≤${days} يوم)`, all_active:'كل الفعّال'}[audience];
+  await logAdminActivity('إرسال تنبيه جماعي', `${audienceLabel} — ${msg.slice(0,80)}`);
+  toast(`تم إرسال التنبيه لفئة: ${audienceLabel} 📢`);
   document.getElementById('trialBroadcastMsg').value = '';
 }
 
@@ -4568,6 +4641,46 @@ async function renderAdminAuditLog(){
         <div style="padding:12px 0; border-bottom:1px solid var(--border); font-size:13px;">
           <strong>${escapeHTML(e.action)}</strong>${e.details ? ' — ' + escapeHTML(e.details) : ''}
           <div style="color:var(--muted); font-size:11px; margin-top:2px;" dir="ltr" style="text-align:right;">${escapeHTML(e.actorEmail||'')} · ${new Date(e.time).toLocaleString('ar')}</div>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-ghost" onclick="renderAdminPanel()">رجوع</button>
+  `;
+}
+
+/* ================= ADMIN: سجل زيارات الموقع (زوار ما سجّلوا ولا عملوا شي) ================= */
+async function renderAdminVisitsLog(){
+  document.getElementById('adminView').innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري التحميل...</p></div>`;
+  let visits = [];
+  try{
+    const snap = await _db.collection('siteVisits').get();
+    visits = snap.docs.map(d => d.data());
+  }catch(e){ console.error('renderAdminVisitsLog failed', e); }
+
+  const now = Date.now();
+  const last7 = visits.filter(v => now - v.lastVisit <= 7*24*60*60*1000).length;
+  const today = visits.filter(v => now - v.lastVisit <= 24*60*60*1000).length;
+  const recent = visits.slice().sort((a,b) => b.lastVisit - a.lastVisit).slice(0, 40);
+
+  document.getElementById('adminView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">تحليلات عامة</div>
+      <h3>👁️ سجل زيارات الموقع</h3>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">زوار فتحوا الصفحة الرئيسية بس ما سجّلوا حساب ولا سووا أي شي بعد — كل جهاز يُحسب زيارة وحدة (مو كل رفرش)، ويتحدث تلقائياً لو رجع بعد أكثر من يوم.</p>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box tone-sky"><div class="num">${visits.length}</div><div class="lbl">👥 إجمالي الزوار الفريدين</div></div>
+      <div class="stat-box tone-family"><div class="num">${last7}</div><div class="lbl">🗓️ خلال آخر 7 أيام</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box tone-accent" style="flex:1;"><div class="num">${today}</div><div class="lbl">📍 اليوم</div></div>
+    </div>
+    <div class="card">
+      <h3>آخر الزيارات</h3>
+      ${recent.length===0 ? `<div class="empty"><span class="icon">👁️</span><p>ما فيه زيارات مسجّلة بعد</p></div>` : recent.map(v => `
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px;">
+          <span>زائر ${v.visitCount>1 ? `(زار ${v.visitCount} مرات)` : '(زيارة أولى)'}</span>
+          <span style="color:var(--muted);">${new Date(v.lastVisit).toLocaleString('ar')}</span>
         </div>
       `).join('')}
     </div>
