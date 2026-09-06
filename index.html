@@ -5,6 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ختم — منصة الولاء الرقمية لنشاطك التجاري</title>
 <link rel="manifest" href="manifest.json">
+<!-- Meta Pixel Base Code (Pixel ID: 28489089637394872) -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+window._META_PIXEL_ID = '28489089637394872';
+if(window._META_PIXEL_ID && window._META_PIXEL_ID !== 'YOUR_PIXEL_ID'){
+  fbq('init', window._META_PIXEL_ID);
+  fbq('track', 'PageView');
+}
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=28489089637394872&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Base Code -->
 <meta name="theme-color" content="#161B33">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1702,6 +1722,7 @@ function showLandingPage(){
   if(devsFooterEl) devsFooterEl.innerHTML = devsFooterHTML();
   loadLandingExtras();
   trackSiteVisit();
+  trackPixel('ViewContent', {content_name: 'landing_page'});
 }
 
 /* -------- تتبّع زيارات الصفحة الرئيسية (زوار ما سجّلوا ولا عملوا شي) --------
@@ -1713,6 +1734,15 @@ async function getVisitorIP(){
     const data = await res.json();
     return data.ip || null;
   }catch(e){ return null; } // خدمة خارجية — لو فشلت أو انحجبت، نكمل بدون آيبي بدون ما نوقف الموقع
+}
+
+/* -------- Meta Pixel: تتبّع أحداث حقيقية (مو بس زيارات) عشان يعرف مين فعلاً سجّل -------- */
+function trackPixel(eventName, params){
+  try{
+    if(window.fbq && window._META_PIXEL_ID && window._META_PIXEL_ID !== 'YOUR_PIXEL_ID'){
+      fbq('track', eventName, params || {});
+    }
+  }catch(e){ /* تتبّع ثانوي، ما نوقف أي شي لو فشل */ }
 }
 
 async function trackSiteVisit(){
@@ -1867,6 +1897,7 @@ function goToApp(mode){
   switchTab('merchant');
   if(mode === 'register' && !currentBiz && !loadPendingRegistration()){
     renderMerchantRegister();
+    trackPixel('Lead', {content_name: 'merchant_registration_started'});
   } else {
     renderMerchantEntry();
   }
@@ -2217,6 +2248,9 @@ async function verifyEmailCode(){
   saveBizSession(p.phone);
   clearPendingRegistration();
 
+  trackPixel('CompleteRegistration', {content_name: 'merchant_signup', status: 'trial'});
+  trackPixel('StartTrial', {content_name: 'free_trial_30_days', value: 0, currency: 'IQD', predicted_ltv: 15000});
+
   toast('🎉 تم التحقق! عندك شهر مجاني كامل');
   renderMerchantDashboard();
 }
@@ -2338,6 +2372,11 @@ function renderTrialExpired(){
 
 function dismissTrialBroadcast(time){
   localStorage.setItem('wala_trialNoticeSeen_'+currentBiz.id, String(time));
+  renderMerchantDashboard();
+}
+
+function dismissActivationNotice(time){
+  localStorage.setItem('wala_activationSeen_'+currentBiz.id, String(time));
   renderMerchantDashboard();
 }
 
@@ -2525,6 +2564,21 @@ async function renderMerchantDashboard(){
     </div>
   ` : '';
 
+  // تنبيه ترحيبي شخصي لما الحساب يتحول من تجريبي/متوقف لفعّال (مرة وحدة، يقدر يغلقه)
+  let activationBanner = '';
+  if(currentBiz.activationNotice){
+    const seenTime = parseInt(localStorage.getItem('wala_activationSeen_'+currentBiz.id) || '0', 10);
+    if(currentBiz.activationNotice.time > seenTime){
+      activationBanner = `
+        <div class="card" style="background:#E8F8EE; border:1.5px solid #34C77B; text-align:center;">
+          <div class="eyebrow" style="color:#1E8449;">تهانينا</div>
+          <p style="font-size:14px; line-height:1.8; font-weight:700;">${escapeHTML(currentBiz.activationNotice.message)}</p>
+          <button class="btn btn-primary" style="margin-top:6px;" onclick="dismissActivationNotice(${currentBiz.activationNotice.time})">🎉 شكراً!</button>
+        </div>
+      `;
+    }
+  }
+
   // تنبيه جماعي من الإدارة — الحين يدعم استهداف دقيق (كل تجريبي / تجريبي قرب الانتهاء / كل فعّال)
   let trialBroadcastBanner = '';
   try{
@@ -2579,6 +2633,7 @@ async function renderMerchantDashboard(){
       </div>
       ${trialNote}
     </div>
+    ${activationBanner}
     ${trialBroadcastBanner}
     ${pricingCardForTrial}
 
@@ -5061,12 +5116,19 @@ async function adminExtendSubscription(bizId){
   const months = parseInt(document.getElementById('admEdExtendMonths').value) || 1;
   const b = await getBusiness(bizId);
   if(!b) return;
+  const wasActive = b.subscriptionStatus === 'active';
   const now = new Date();
   const currentUntil = b.subscriptionUntil ? new Date(b.subscriptionUntil) : now;
   const base = currentUntil > now ? currentUntil : now; // نمدد فوق التاريخ الحالي لو لسا سارٍ، أو من اليوم لو منتهي
   base.setDate(base.getDate() + months*30);
   b.subscriptionUntil = base.toISOString();
   b.subscriptionStatus = 'active';
+  if(!wasActive){
+    b.activationNotice = {
+      message: '🎉 تم تفعيل اشتراكك المدفوع بنجاح! أهلاً بك بعائلة "خَتم" الكاملة — كل الميزات الحصرية (الرسائل، الإحصائيات الكاملة، البحث، مشاركة رأيك) صارت مفتوحة لك الحين.',
+      time: Date.now()
+    };
+  }
   await saveBusiness(bizId, b);
   if(currentBiz && currentBiz.id===bizId) currentBiz = b;
   await logAdminActivity('تفعيل/تمديد اشتراك', `${b.name} (${bizId}) — ${months} شهر`);
@@ -5118,7 +5180,14 @@ async function adminDeleteBusiness(bizId){
 async function toggleSubscription(bizId){
   const biz = await getBusiness(bizId);
   if(!biz) return;
-  biz.subscriptionStatus = biz.subscriptionStatus==='active' ? 'inactive' : 'active';
+  const wasActive = biz.subscriptionStatus === 'active';
+  biz.subscriptionStatus = wasActive ? 'inactive' : 'active';
+  if(!wasActive){
+    biz.activationNotice = {
+      message: '🎉 تم تفعيل اشتراكك المدفوع بنجاح! أهلاً بك بعائلة "خَتم" الكاملة — كل الميزات الحصرية (الرسائل، الإحصائيات الكاملة، البحث، مشاركة رأيك) صارت مفتوحة لك الحين.',
+      time: Date.now()
+    };
+  }
   await saveBusiness(bizId, biz);
   if(currentBiz && currentBiz.id===bizId) currentBiz = biz;
   await logAdminActivity(biz.subscriptionStatus==='active' ? 'تفعيل اشتراك' : 'إيقاف اشتراك', `${biz.name} (${bizId})`);
