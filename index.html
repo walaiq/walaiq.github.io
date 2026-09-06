@@ -4588,6 +4588,7 @@ async function renderAdminPanel(){
       <button class="btn btn-ghost" onclick="renderAdminActivityLog()">📜 سجل التغييرات</button>
       <button class="btn btn-ghost" onclick="renderAdminAuditLog()">🛡️ سجل نشاط الإدارة</button>
       <button class="btn btn-ghost" onclick="renderAdminVisitsLog()">👁️ سجل زيارات الموقع</button>
+      <button class="btn btn-ghost" onclick="renderAdminFinancials()">💰 اللوحة المالية الشاملة</button>
       <button class="btn btn-ghost" onclick="renderAdminPartners()">🤝 شركاؤنا (الصفحة الرئيسية)</button>
       <button class="btn btn-ghost" onclick="renderAdminTestimonials()">💬 آراء العملاء (الصفحة الرئيسية)</button>
     </div>
@@ -4716,6 +4717,135 @@ async function renderAdminAuditLog(){
 }
 
 /* ================= ADMIN: سجل زيارات الموقع (زوار ما سجّلوا ولا عملوا شي) ================= */
+/* ================= ADMIN: اللوحة المالية الشاملة (سجل دفعات + تصفير المجموع) ================= */
+async function renderAdminFinancials(){
+  document.getElementById('adminView').innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري التحميل...</p></div>`;
+
+  const businesses = await listBusinesses();
+  const raw = await storageGetSilent('financial-log');
+  const payments = raw ? JSON.parse(raw) : [];
+  const resetRaw = await storageGetSilent('financial-reset-point');
+  const resetPoint = resetRaw ? JSON.parse(resetRaw) : null;
+  const resetTime = resetPoint ? resetPoint.resetAt : 0;
+
+  const sinceReset = payments.filter(p => p.date >= resetTime);
+  const totalSinceReset = sinceReset.reduce((s,p) => s + (p.amount||0), 0);
+  const totalAllTime = payments.reduce((s,p) => s + (p.amount||0), 0);
+
+  const bizOptions = businesses.map(b => `<option value="${b.id}">${escapeHTML(b.name)} (${escapeHTML(b.id)})</option>`).join('');
+
+  const sortedPayments = payments.slice().sort((a,b) => b.date - a.date);
+
+  document.getElementById('adminView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">لوحة مالية</div>
+      <h3>💰 اللوحة المالية الشاملة</h3>
+      <p style="font-size:12.5px; color:var(--muted); line-height:1.7;">سجل يدوي لكل الدفعات المستلمة من التجار — كل عملية دفع تسجّلها بنفسك هنا (بما إن التفعيل يصير يدوياً عبر واتساب).</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box tone-family" style="flex:1;"><div class="num">${totalSinceReset.toLocaleString('en-US')} د.ع</div><div class="lbl">💰 المجموع منذ آخر تصفير${resetPoint ? ' ('+new Date(resetTime).toLocaleDateString('ar')+')' : ''}</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box tone-sky"><div class="num">${totalAllTime.toLocaleString('en-US')} د.ع</div><div class="lbl">إجمالي كل الأوقات</div></div>
+      <div class="stat-box tone-accent"><div class="num">${payments.length}</div><div class="lbl">عدد الدفعات المسجّلة</div></div>
+    </div>
+    <button class="btn btn-ghost" onclick="confirmResetFinancialTotal()">🔄 تصفير المجموع (يبدأ عدّاد جديد، بدون حذف السجل)</button>
+
+    <div class="card">
+      <h3>➕ إضافة دفعة جديدة</h3>
+      <label>الحساب</label>
+      <select id="finPayBiz">${bizOptions}</select>
+      <label>المبلغ (د.ع)</label>
+      <input type="text" id="finPayAmount" inputmode="numeric" value="15000">
+      <label>تاريخ الدفعة</label>
+      <input type="date" id="finPayDate" value="${new Date().toISOString().slice(0,10)}">
+      <label>ملاحظة (اختياري)</label>
+      <input type="text" id="finPayNote" placeholder="مثلاً: اشتراك شهر أكتوبر">
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="addFinancialPayment()">إضافة الدفعة</button>
+    </div>
+
+    <div class="card">
+      <h3>📋 سجل كل الدفعات (بالتفاصيل والتواريخ)</h3>
+      ${sortedPayments.length===0 ? `<div class="empty"><span class="icon">💳</span><p>ما فيه دفعات مسجّلة بعد</p></div>` : sortedPayments.map(p => `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;">
+          <div>
+            <div style="font-weight:800;">${escapeHTML(p.bizName)}</div>
+            <div style="color:var(--muted); font-size:11.5px;">${new Date(p.date).toLocaleDateString('ar')}${p.note ? ' · '+escapeHTML(p.note) : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-weight:900; color:var(--primary);">${(p.amount||0).toLocaleString('en-US')} د.ع</div>
+            <button class="link-btn" style="color:var(--danger);" onclick="deleteFinancialPayment('${p.id}')">حذف</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <h3>📊 الإجمالي حسب كل حساب</h3>
+      ${businesses.map(b => {
+        const bizTotal = payments.filter(p => p.bizId===b.id).reduce((s,p)=>s+(p.amount||0),0);
+        if(bizTotal === 0) return '';
+        return `<div class="biz-item"><div class="biz-name">${escapeHTML(b.name)}</div><div style="font-weight:800;">${bizTotal.toLocaleString('en-US')} د.ع</div></div>`;
+      }).join('') || `<div class="empty"><span class="icon">📊</span><p>ما فيه بيانات بعد</p></div>`}
+    </div>
+
+    <button class="btn btn-ghost" onclick="renderAdminPanel()">رجوع</button>
+  `;
+}
+
+async function addFinancialPayment(){
+  const bizSelect = document.getElementById('finPayBiz');
+  const bizId = bizSelect.value;
+  const bizName = bizSelect.options[bizSelect.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,'');
+  const amount = parseInt(document.getElementById('finPayAmount').value) || 0;
+  const dateStr = document.getElementById('finPayDate').value;
+  const note = document.getElementById('finPayNote').value.trim();
+  if(!bizId || amount <= 0){ toast('اختر الحساب واكتب مبلغ صحيح'); return; }
+
+  const raw = await storageGetSilent('financial-log');
+  const payments = raw ? JSON.parse(raw) : [];
+  payments.push({
+    id: 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+    bizId, bizName, amount, note,
+    date: dateStr ? new Date(dateStr).getTime() : Date.now()
+  });
+  await storageSet('financial-log', JSON.stringify(payments));
+  await logAdminActivity('تسجيل دفعة مالية', `${bizName} — ${amount.toLocaleString('en-US')} د.ع`);
+  toast('تمت إضافة الدفعة ✅');
+  renderAdminFinancials();
+}
+
+function deleteFinancialPayment(paymentId){
+  showConfirmModal(
+    'حذف دفعة',
+    'راح يُحذف سجل هذي الدفعة نهائياً من اللوحة المالية.',
+    'حذف نهائياً',
+    async () => {
+      const raw = await storageGetSilent('financial-log');
+      let payments = raw ? JSON.parse(raw) : [];
+      payments = payments.filter(p => p.id !== paymentId);
+      await storageSet('financial-log', JSON.stringify(payments));
+      toast('تم حذف الدفعة');
+      renderAdminFinancials();
+    }
+  );
+}
+
+function confirmResetFinancialTotal(){
+  showConfirmModal(
+    'تصفير المجموع',
+    'هذا يبدأ عدّاد "المجموع منذ آخر تصفير" من جديد (يرجع صفر) — بدون ما يحذف أي دفعة من السجل الكامل تحت. مفيد لو تحب تتابع إيراد شهر معين لحاله.',
+    'تصفير المجموع',
+    async () => {
+      await storageSet('financial-reset-point', JSON.stringify({resetAt: Date.now()}));
+      await logAdminActivity('تصفير المجموع المالي', '');
+      toast('تم تصفير المجموع ✅');
+      renderAdminFinancials();
+    }
+  );
+}
+
 async function renderAdminVisitsLog(){
   document.getElementById('adminView').innerHTML = `<div class="card"><p style="text-align:center; color:var(--muted); font-size:13px;">جاري التحميل...</p></div>`;
   let visits = [];
@@ -5037,7 +5167,7 @@ function renderBizListHTML(businesses){
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
             <a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}" target="_blank" rel="noopener" class="link-btn" style="color:#25D366;" title="راسله بالواتساب">💬 واتساب</a>
             ${isTrial ? `<a href="https://wa.me/${normalizePhoneForWhatsapp(b.phone||b.id)}?text=${renewMsg}" target="_blank" rel="noopener" class="link-btn" style="color:#B8860B;" title="ذكّره بالتجديد">⏰ ذكّره</a>` : ''}
-            <button class="link-btn" onclick="toggleAdminQuickStats('${b.id}')">👁️ لمحة سريعة</button>
+            <button class="link-btn" onclick="toggleAdminQuickStats('${b.id}')">👁️ معلومات</button>
             <button class="link-btn" onclick="toggleSubscription('${b.id}')">${b.subscriptionStatus==='active'?'إيقاف':'تفعيل'}</button>
             <button class="link-btn" onclick="adminEditBusiness('${b.id}')">تعديل</button>
             <button class="link-btn" style="color:var(--danger);" onclick="adminDeleteBusiness('${b.id}')">حذف</button>
