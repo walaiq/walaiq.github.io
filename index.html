@@ -4770,11 +4770,12 @@ async function renderAdminFinancials(){
       ${sortedPayments.length===0 ? `<div class="empty"><span class="icon">💳</span><p>ما فيه دفعات مسجّلة بعد</p></div>` : sortedPayments.map(p => `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;">
           <div>
-            <div style="font-weight:800;">${escapeHTML(p.bizName)}</div>
+            <div style="font-weight:800;">${escapeHTML(p.bizName)} ${p.auto ? '<span style="font-size:10px; color:var(--muted); font-weight:600;">(تلقائي)</span>' : ''}</div>
             <div style="color:var(--muted); font-size:11.5px;">${new Date(p.date).toLocaleDateString('ar')}${p.note ? ' · '+escapeHTML(p.note) : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
             <div style="font-weight:900; color:var(--primary);">${(p.amount||0).toLocaleString('en-US')} د.ع</div>
+            <button class="link-btn" onclick="editFinancialPayment('${p.id}')">تعديل</button>
             <button class="link-btn" style="color:var(--danger);" onclick="deleteFinancialPayment('${p.id}')">حذف</button>
           </div>
         </div>
@@ -4813,6 +4814,45 @@ async function addFinancialPayment(){
   await storageSet('financial-log', JSON.stringify(payments));
   await logAdminActivity('تسجيل دفعة مالية', `${bizName} — ${amount.toLocaleString('en-US')} د.ع`);
   toast('تمت إضافة الدفعة ✅');
+  renderAdminFinancials();
+}
+
+async function editFinancialPayment(paymentId){
+  const raw = await storageGetSilent('financial-log');
+  const payments = raw ? JSON.parse(raw) : [];
+  const p = payments.find(x => x.id === paymentId);
+  if(!p){ toast('ما لقينا هذي الدفعة'); return; }
+  document.getElementById('adminView').innerHTML = `
+    <div class="card">
+      <div class="eyebrow">تعديل دفعة</div>
+      <h3>${escapeHTML(p.bizName)}</h3>
+      <label>المبلغ (د.ع)</label>
+      <input type="text" id="edFinAmount" inputmode="numeric" value="${p.amount}">
+      <label>تاريخ الدفعة</label>
+      <input type="date" id="edFinDate" value="${new Date(p.date).toISOString().slice(0,10)}">
+      <label>ملاحظة (اختياري)</label>
+      <input type="text" id="edFinNote" value="${escapeHTML(p.note||'')}">
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="saveEditedFinancialPayment('${paymentId}')">حفظ التعديل</button>
+    </div>
+    <button class="btn btn-ghost" onclick="renderAdminFinancials()">إلغاء</button>
+  `;
+}
+
+async function saveEditedFinancialPayment(paymentId){
+  const amount = parseInt(document.getElementById('edFinAmount').value) || 0;
+  const dateStr = document.getElementById('edFinDate').value;
+  const note = document.getElementById('edFinNote').value.trim();
+  if(amount <= 0){ toast('اكتب مبلغ صحيح'); return; }
+  const raw = await storageGetSilent('financial-log');
+  let payments = raw ? JSON.parse(raw) : [];
+  const p = payments.find(x => x.id === paymentId);
+  if(!p){ toast('ما لقينا هذي الدفعة'); return; }
+  p.amount = amount;
+  p.date = dateStr ? new Date(dateStr).getTime() : p.date;
+  p.note = note;
+  delete p.auto; // بعد التعديل اليدوي ما تبقى "تلقائية" تماماً
+  await storageSet('financial-log', JSON.stringify(payments));
+  toast('تم حفظ التعديل ✅');
   renderAdminFinancials();
 }
 
@@ -5242,6 +5282,19 @@ async function adminEditBusiness(bizId){
   `;
 }
 
+/* -------- يضيف دفعة مالية تلقائياً كل مرة يفعّل/يمدد الإدارة اشتراك حساب -------- */
+async function autoRecordFinancialPayment(bizId, bizName, amount, note){
+  try{
+    const raw = await storageGetSilent('financial-log');
+    const payments = raw ? JSON.parse(raw) : [];
+    payments.push({
+      id: 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      bizId, bizName, amount, note, date: Date.now(), auto: true
+    });
+    await storageSet('financial-log', JSON.stringify(payments));
+  }catch(e){ console.error('autoRecordFinancialPayment failed', e); }
+}
+
 async function adminExtendSubscription(bizId){
   const months = parseInt(document.getElementById('admEdExtendMonths').value) || 1;
   const b = await getBusiness(bizId);
@@ -5262,7 +5315,8 @@ async function adminExtendSubscription(bizId){
   await saveBusiness(bizId, b);
   if(currentBiz && currentBiz.id===bizId) currentBiz = b;
   await logAdminActivity('تفعيل/تمديد اشتراك', `${b.name} (${bizId}) — ${months} شهر`);
-  toast(`تم تفعيل/تمديد الاشتراك ${months} شهر ✅`);
+  await autoRecordFinancialPayment(bizId, b.name, months*15000, `تفعيل/تمديد تلقائي — ${months} شهر`);
+  toast(`تم تفعيل/تمديد الاشتراك ${months} شهر ✅ — وتسجلت دفعة تلقائية باللوحة المالية`);
   renderAdminPanel();
 }
 
@@ -5321,6 +5375,9 @@ async function toggleSubscription(bizId){
   await saveBusiness(bizId, biz);
   if(currentBiz && currentBiz.id===bizId) currentBiz = biz;
   await logAdminActivity(biz.subscriptionStatus==='active' ? 'تفعيل اشتراك' : 'إيقاف اشتراك', `${biz.name} (${bizId})`);
+  if(!wasActive){
+    await autoRecordFinancialPayment(bizId, biz.name, 15000, 'تفعيل تلقائي (تبديل الحالة) — شهر واحد');
+  }
   toast('تم تحديث حالة الاشتراك');
   renderAdminPanel();
 }
