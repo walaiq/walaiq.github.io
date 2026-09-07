@@ -2599,8 +2599,10 @@ async function renderMerchantDashboard(){
         eligible = status === 'active';
       }
       if(eligible){
+        // الحساب لازم يكون موجود فعلاً وقت إرسال التنبيه — حسابات جديدة انسجلت بعده ما تشوفه
+        const joinedBeforeNotice = currentBiz.createdAt ? (new Date(currentBiz.createdAt).getTime() <= notice.time) : true;
         const seenTime = parseInt(localStorage.getItem('wala_trialNoticeSeen_'+currentBiz.id) || '0', 10);
-        if(notice.time > seenTime){
+        if(joinedBeforeNotice && notice.time > seenTime){
           trialBroadcastBanner = `
             <div class="card" style="background:#FFF3E0; border:1.5px solid #F5B942;">
               <div class="eyebrow" style="color:#B8860B;">📢 تنبيه من إدارة خَتم</div>
